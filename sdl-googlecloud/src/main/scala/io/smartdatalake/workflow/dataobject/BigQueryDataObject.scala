@@ -27,7 +27,10 @@ import io.smartdatalake.workflow.ActionPipelineContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 case class BigQueryDataObject(override val id: DataObjectId,
-                              override val metadata: Option[DataObjectMetadata] = None)
+                              override val metadata: Option[DataObjectMetadata] = None,
+                              bigqueryTable: BigQueryTable,
+                              parentProject: Option[String] = None
+                             )
                              (@transient implicit val instanceRegistry: InstanceRegistry)
 extends DataObject with CanCreateDataFrame {
 
@@ -44,12 +47,15 @@ extends DataObject with CanCreateDataFrame {
   override def getDataFrame(partitionValues: Seq[PartitionValues])(implicit session: SparkSession, context: ActionPipelineContext): DataFrame = {
 
     session.read
+      .option("parentProject",parentProject.getOrElse(bigqueryTable.project))
       .format("bigquery")
-      .load("bigquery-public-data.samples.shakespeare")
-
+      .load(bigqueryTable.fullyQualifiedName)
   }
 }
 
+case class BigQueryTable(project: String, dataset:String, table: String) {
+  val fullyQualifiedName = project+"."+dataset+"."+table
+}
 
 object BigQueryDataObject extends FromConfigFactory[DataObject] {
   /**
@@ -57,7 +63,7 @@ object BigQueryDataObject extends FromConfigFactory[DataObject] {
    *
    * @return a new instance of type `CO` parsed from the a context dependent [[Config]].
    */
-  override def fromConfig(config: Config)(implicit instanceRegistry: InstanceRegistry): DataObject = {
+  override def fromConfig(config: Config)(implicit instanceRegistry: InstanceRegistry): BigQueryDataObject = {
     extract[BigQueryDataObject](config)
   }
 }
