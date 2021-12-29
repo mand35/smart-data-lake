@@ -18,6 +18,7 @@
  */
 package io.smartdatalake.util.evolution
 
+import io.smartdatalake.dataframe.SDLDataType
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
@@ -34,7 +35,7 @@ private[smartdatalake] case class CopyValueProjector(path: Seq[String] ) extends
   def get(in: Any): Any = in
 }
 
-private[smartdatalake] case class SimpleTypeValueProjector(srcType: DataType, tgtType: DataType, path: Seq[String] ) extends ValueProjector[Any] {
+private[smartdatalake] case class SimpleTypeValueProjector(srcType: SDLDataType, tgtType: SDLDataType, path: Seq[String] ) extends ValueProjector[Any] {
   private val converter = ValueProjector.getSimpleTypeConverter(srcType, tgtType, path)
   def get(in: Any): Any = converter(in)
 }
@@ -59,7 +60,7 @@ private[smartdatalake] case class MapTypeValueProjector(srcType: MapType, tgtTyp
 
 private[smartdatalake] object ValueProjector {
 
-  private[evolution] def getProjection(srcType: DataType, tgtType: DataType, path: Seq[String]): ValueProjector[_] = {
+  private[evolution] def getProjection(srcType: SDLDataType, tgtType: SDLDataType, path: Seq[String]): ValueProjector[_] = {
     (srcType, tgtType) match {
       case (_, _) if srcType.simpleString == tgtType.simpleString => // data type equal
         CopyValueProjector(path)
@@ -74,7 +75,7 @@ private[smartdatalake] object ValueProjector {
     }
   }
 
-  private[evolution] def getSimpleTypeConverter(srcType: DataType, tgtType: DataType, path: Seq[String]): (Any => Any) = {
+  private[evolution] def getSimpleTypeConverter(srcType: SDLDataType, tgtType: SDLDataType, path: Seq[String]): (Any => Any) = {
     val converterFunc: (Any => Any) = (srcType, tgtType) match {
       // numeric types to string
       case (_: NumericType, _: StringType) => (x => x.toString)

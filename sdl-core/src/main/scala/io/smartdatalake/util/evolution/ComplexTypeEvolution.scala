@@ -18,6 +18,7 @@
  */
 package io.smartdatalake.util.evolution
 
+import io.smartdatalake.dataframe.SDLDataType
 import io.smartdatalake.util.misc.SmartDataLakeLogger
 import org.apache.spark.sql.custom.UnsafeUnaryUdf
 import org.apache.spark.sql.types._
@@ -48,9 +49,9 @@ private[smartdatalake] object ComplexTypeEvolution extends SmartDataLakeLogger {
   /**
    * Creates a Spark udf to convert a [[org.apache.spark.sql.Column]] from one schema to another.
    *
-   * @param srcType DataType of the column to be converted
-   * @param tgtType target DataType
-   * @return udf to convert a [[org.apache.spark.sql.Column]] to the target DataType
+   * @param srcType SDLDataType of the column to be converted
+   * @param tgtType target SDLDataType
+   * @return udf to convert a [[org.apache.spark.sql.Column]] to the target SDLDataType
    * @throws SchemaEvolutionException if conversion is not possible
    */
   def schemaEvolutionUdf(srcType: DataType, tgtType: DataType): (Column => Column) = {
@@ -59,16 +60,16 @@ private[smartdatalake] object ComplexTypeEvolution extends SmartDataLakeLogger {
   }
 
   /**
-   * Creates a consolidated DataType of given old and new DataType's. Handles new columns and deleted columns.
+   * Creates a consolidated SDLDataType of given old and new SDLDataType's. Handles new columns and deleted columns.
    * To be used to create tgtSchema/tgtType for methods [[schemaEvolution]] and [[schemaEvolutionUdf]].
    *
-   * @param leftType old DataType
-   * @param rightType new DataType
+   * @param leftType old SDLDataType
+   * @param rightType new SDLDataType
    * @param ignoreOldDeletedColumns if true, remove no longer existing columns
    * @param path expression path for logging purposes. Can be filled with column name for better traceability.
-   * @return consolidated DataType
+   * @return consolidated SDLDataType
    */
-  def consolidateType(leftType: DataType, rightType: DataType, ignoreOldDeletedColumns: Boolean = true, path: Seq[String] = Seq()): DataType = {
+  def consolidateType(leftType: SDLDataType, rightType: SDLDataType, ignoreOldDeletedColumns: Boolean = true, path: Seq[String] = Seq()): SDLDataType = {
     (leftType, rightType) match {
       case (leftType: StructType, rightType: StructType) => // struct type -> recursion
         consolidateStructType(leftType, rightType, ignoreOldDeletedColumns, path)
