@@ -18,12 +18,9 @@
  */
 package io.smartdatalake.util.evolution
 
-import io.smartdatalake.dataframe.{SDLDataFrame, SDLDataType, SDLStructType, SparkSDLStructType}
+import io.smartdatalake.dataframe.{SDLColumn, SDLDataFrame, SDLDataType, SDLStructField, SDLStructType, SparkArrayType, SparkMapType, SparkSDLStructType, SparkStructType}
 import io.smartdatalake.definitions.Environment
 import io.smartdatalake.util.misc.SmartDataLakeLogger
-import org.apache.spark.sql.Column
-import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types._
 
 import scala.util.Try
 
@@ -50,8 +47,8 @@ private[smartdatalake] object SchemaEvolution extends SmartDataLakeLogger {
     getFieldTuples(dataFrame.schema)
   }
 
-  def getFieldTuples(schema: SDLStructType): Set[(String, String)] = {
-    schema.fields.map(f => (f.name, f.dataType.simpleString)).toSet
+  def getFieldTuples(schema: Seq[SDLStructField]): Set[(String, String)] = {
+    schema.map(f => (f.name, f.dataType.simpleString)).toSet
   }
 
   /**
@@ -75,8 +72,8 @@ private[smartdatalake] object SchemaEvolution extends SmartDataLakeLogger {
    */
   def process(oldDf: SDLDataFrame, newDf: SDLDataFrame, colsToIgnore: Seq[String] = Seq(), ignoreOldDeletedColumns: Boolean = false, ignoreOldDeletedNestedColumns: Boolean = true): (SDLDataFrame, SDLDataFrame) = {
     // internal structure and functions
-    case class ColumnDetail(name: String, oldToNewColumn: Option[Column], newColumn: Option[Column], infoMsg: Option[String], errMsg: Option[String])
-    def getNullColumnOfType(d: SDLDataType) = lit(null).cast(d)
+    case class ColumnDetail(name: String, oldToNewColumn: Option[SDLColumn], newColumn: Option[SDLColumn], infoMsg: Option[String], errMsg: Option[String])
+    def getNullColumnOfType(df: SDLDataFrame, d: SDLDataType) = df.lit(null).cast(d)
 
     // log entry point
     logger.debug(s"old schema: ${oldDf.schema.treeString}")
@@ -113,23 +110,23 @@ private[smartdatalake] object SchemaEvolution extends SmartDataLakeLogger {
         c =>
           val oldType = oldDf.schema.fields.find(_.name == c).map(_.dataType)
           val newType = newDf.schema.fields.find(_.name == c).map(_.dataType)
-          val thisColumn = Some(col(c))
+          val thisColumn = Some(oldDf(c))
           // define conversion
           val (oldToNewColumn, newColumn, infoMsg, errMsg) = (oldType, newType) match {
             // column is new -> fill in old data with null
             case (None, Some(n)) =>
-              val nullColumn = Some(getNullColumnOfType(n).as(c))
+              val nullColumn = Some(getNullColumnOfType(oldDf, n).as(c))
               val info = Some(s"column $c is new")
               (nullColumn, thisColumn, info, None)
             // column is old -> fill in new data with null
             case (Some(o), None) =>
               val (oldToNewColumn, newColumn, info) = if (colsToIgnore.contains(c)) (thisColumn, None, Some(s"column $c is ignored because it is in the list of columns to ignore"))
               else if (ignoreOldDeletedColumns) (None, None, Some(s"column $c is old and will be removed because ignoreOldDeletedColumns=true"))
-              else (thisColumn, Some(getNullColumnOfType(o).as(c)), Some(s"column $c is old and will be set to null for new records"))
+              else (thisColumn, Some(getNullColumnOfType(oldDf, o).as(c)), Some(s"column $c is old and will be set to null for new records"))
               (oldToNewColumn, newColumn, info, None)
             // datatypes are *not* equal -> conversion of old to new datatype required
             case (Some(o), Some(n)) if o.simpleString != n.simpleString =>
-              val convertedColumns = convertSDLDataType(col(c), o, n, ignoreOldDeletedNestedColumns)
+              val convertedColumns = convertSDLDataType(oldDf(c), o, n, ignoreOldDeletedNestedColumns)
               val info = if (convertedColumns.isDefined) Some(s"column $c is converted from ${o.simpleString}/${n.simpleString} to ${convertedColumns.get._3.simpleString}") else None
               val err = if (convertedColumns.isEmpty) Some(s"column $c cannot be converted from ${o.simpleString} to ${n.simpleString}") else None
               (convertedColumns.map(_._1.as(c)), convertedColumns.map(_._2.as(c)), info, err)
@@ -152,8 +149,8 @@ private[smartdatalake] object SchemaEvolution extends SmartDataLakeLogger {
       logger.info(s"new schema: ${newDf.schema.treeString}")
 
       // prepare dataframes
-      val oldExtendedDf = oldDf.select(tgtColumns.flatMap(_.oldToNewColumn))
-      val newExtendedDf = newDf.select(tgtColumns.flatMap(_.newColumn))
+      val oldExtendedDf = oldDf.select(tgtColumns.flatMap(_.oldToNewColumn): _*)
+      val newExtendedDf = newDf.select(tgtColumns.flatMap(_.newColumn): _*)
 
       // return
       (oldExtendedDf, newExtendedDf)
@@ -190,6 +187,10 @@ private[smartdatalake] object SchemaEvolution extends SmartDataLakeLogger {
   }
 
   def hasSameColNamesAndTypes(oldSchema: SDLStructType, newSchema: SDLStructType): Boolean = {
+    getFieldTuples(oldSchema.fields) == getFieldTuples(newSchema.fields)
+  }
+
+  def hasSameColNamesAndTypes(oldSchema: Seq[SDLStructField], newSchema: Seq[SDLStructField]): Boolean = {
     getFieldTuples(oldSchema) == getFieldTuples(newSchema)
   }
 
@@ -211,19 +212,26 @@ private[smartdatalake] object SchemaEvolution extends SmartDataLakeLogger {
    * @param right  new SDLDataType
    * @return A column with the transformation expression applied
    */
-  def convertSDLDataType(column: Column, left: SDLDataType, right: SDLDataType, ignoreOldDeletedNestedColumns: Boolean): Option[(Column, Column, SDLDataType)] = {
+  def convertSDLDataType(column: SDLColumn, left: SDLDataType, right: SDLDataType, ignoreOldDeletedNestedColumns: Boolean): Option[(SDLColumn, SDLColumn, SDLDataType)] = {
     (left, right) match {
       // simple type
       case (_, _) if isSimpleTypeCastable(left, right) =>
         Some(column.cast(right), column, right)
-      // complex type
-      case (_: SparkSDLStructType, _: SparkSDLStructType) | (_: ArrayType, _: ArrayType) | (_: MapType, _: MapType) =>
-        val tgtType = ComplexTypeEvolution.consolidateType(left, right, ignoreOldDeletedNestedColumns)
-        val udf_convertLeft = ComplexTypeEvolution.schemaEvolutionUdf(left, tgtType)
-        val udf_convertRight = ComplexTypeEvolution.schemaEvolutionUdf(right, tgtType)
-        Some(udf_convertLeft(column), udf_convertRight(column), tgtType)
       // default
-      case _ => None
+      case _ => {
+        (left.dataType, right.dataType) match {
+          // complex type (Spark)
+          case (_: SparkStructType, _: SparkStructType) | (_: SparkArrayType, _: SparkArrayType) | (_: SparkMapType, _: SparkMapType) =>
+            val tgtType = ComplexTypeEvolution.consolidateType(left, right, ignoreOldDeletedNestedColumns)
+            val udf_convertLeft = ComplexTypeEvolution.schemaEvolutionUdf(left, tgtType)
+            val udf_convertRight = ComplexTypeEvolution.schemaEvolutionUdf(right, tgtType)
+            Some(udf_convertLeft(column), udf_convertRight(column), tgtType)
+          // TODO: Implement Complex Type Evolution for Snowpark types
+          // default
+          case (_, _) =>
+            None
+        }
+      }
     }
   }
 

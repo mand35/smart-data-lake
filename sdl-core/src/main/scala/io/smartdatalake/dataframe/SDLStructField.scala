@@ -1,5 +1,3 @@
-import io.smartdatalake.dataframe.SnowparkStructType
-
 /*
  * Smart Data Lake - Build your data lake the smart way.
  *
@@ -19,13 +17,23 @@ import io.smartdatalake.dataframe.SnowparkStructType
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.snowflake.snowpark {
-  object TreeStringHelper {
-    implicit class RichStructType(structType: SnowparkStructType) {
-      def publicTreeString: String = {
-        structType.treeString(1)
-      }
-    }
-  }
+package io.smartdatalake.dataframe
+
+private[smartdatalake] trait SDLStructField {
+  def name: String
+
+  def dataType: SDLDataType
+}
+
+private[smartdatalake] case class SparkSDLStructField(column: SparkStructField) extends SDLStructField {
+  override def name: String = column.name
+
+  override def dataType: SDLDataType = SparkSDLDataType(column.dataType)
+}
+
+private[smartdatalake] case class SnowparkSDLStructField(column: SnowparkStructField) extends SDLStructField {
+  override def name: String = column.name
+
+  override def dataType: SDLDataType = SnowparkSDLDataType(column.dataType)
 }
 

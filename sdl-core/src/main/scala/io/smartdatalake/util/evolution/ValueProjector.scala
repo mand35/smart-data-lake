@@ -76,7 +76,7 @@ private[smartdatalake] object ValueProjector {
   }
 
   private[evolution] def getSimpleTypeConverter(srcType: SDLDataType, tgtType: SDLDataType, path: Seq[String]): (Any => Any) = {
-    val converterFunc: (Any => Any) = (srcType, tgtType) match {
+    val converterFunc: (Any => Any) = (srcType.dataType, tgtType.dataType) match {
       // numeric types to string
       case (_: NumericType, _: StringType) => (x => x.toString)
       case (_: CharType, _: StringType) => (x => x.asInstanceOf[Char].toString)

@@ -19,115 +19,181 @@
 
 package io.smartdatalake.dataframe
 
-import com.snowflake.snowpark.TreeStringHelper
-
-private[smartdatalake] trait SDLColumn {
-  def column: Any
-}
-
-private[smartdatalake] case class SparkSDLColumn(override val column: SparkColumn) extends SDLColumn {}
-
-private[smartdatalake] case class SnowparkSDLColumn(override val column: SnowparkColumn) extends SDLColumn {}
-
-private[smartdatalake] trait SDLStructField {
-  def name: String
-
-  def dataType: SDLDataType
-}
-
-private[smartdatalake] case class SparkSDLStructField(column: SparkStructField) extends SDLStructField {
-  override def name: String = column.name
-
-  override def dataType: SDLDataType = SparkSDLDataType(column.dataType)
-}
-
-private[smartdatalake] case class SnowparkSDLStructField(column: SnowparkStructField) extends SDLStructField {
-  override def name: String = column.name
-
-  override def dataType: SDLDataType = SnowparkSDLDataType(column.dataType)
-}
-
-private[smartdatalake] trait SDLStructType {
-  def fields: Seq[SDLStructField]
-
-  def treeString: String
-}
-
-private[smartdatalake] case class SparkSDLStructType(structType: SparkStructType) extends SDLStructType {
-  override def fields: Seq[SparkSDLStructField] = structType.fields.map(field => SparkSDLStructField(field))
-
-  override def treeString: String = structType.treeString
-}
-
-private[smartdatalake] case class SnowparkSDLStructType(structType: SnowparkStructType) extends SDLStructType {
-  override def fields: Seq[SnowparkSDLStructField] = structType.fields.map(field => SnowparkSDLStructField(field))
-
-  override def treeString: String = TreeStringHelper.RichStructType(structType).publicTreeString
-}
-
-private[smartdatalake] trait SDLDataType {
-  def dataType: Any
-  def simpleString: String
-}
-
-private[smartdatalake] case class SparkSDLDataType(override val dataType: SparkDataType) extends SDLDataType {
-  override def simpleString: String = {
-    dataType.simpleString
-  }
-}
-
-private[smartdatalake] case class SnowparkSDLDataType(override val dataType: SnowparkDataType) extends SDLDataType {
-  override def simpleString: String = {
-    dataType.typeName
-  }
-}
+import com.snowflake.snowpark.SnowparkHelper
+import org.apache.spark.sql.DatasetHelper
 
 private[smartdatalake] trait SDLDataFrame {
+  def showString(): String
+
+  def dataFrame: Any
+
+  def apply(colName: String): SDLColumn
+
+  def lit(value: Any): SDLColumn
+
   def columns: Seq[String]
 
-  def select(colsToSelect: Seq[SDLColumn]): SDLDataFrame
+  def where(colToSelect: SDLColumn): SDLDataFrame = filter(colToSelect)
+
+  def filter(column: SDLColumn): SDLDataFrame
+
+  def select(first: String, remaining: String*): SDLDataFrame = {
+    select((Seq(first) ++ remaining).toArray)
+  }
+
+  def select(colsToSelect: SDLColumn*): SDLDataFrame
 
   def select(colNamesToSelect: Array[String]): SDLDataFrame
 
+  def withColumn(colName: String, column: SDLColumn): SDLDataFrame
+
+  def as(alias: String): SDLDataFrame
+
+  def join(sdlDataFrame: SDLDataFrame, joinCol: SDLColumn, joinType: String): SDLDataFrame =
+    join(sdlDataFrame, Seq(joinCol), joinType)
+
+  def join(sdlDataFrame: SDLDataFrame, joinCols: Seq[SDLColumn], joinType: String): SDLDataFrame
+
+  def union(sdlDataFrame: SDLDataFrame): SDLDataFrame
+
   def schema: SDLStructType
+
+  def count: Long
+
+  def array(columns: SDLColumn*): SDLColumn
+
+  def struct(columns: SDLColumn*): SDLColumn
+
+  def when(condition: SDLColumn, value: Any): SDLColumn
+
+  def explode(column: SDLColumn, newColumnName: String, outer: Boolean): SDLDataFrame
+
+  def drop(colName: String): SDLDataFrame
+
+  def drop(column: SDLColumn): SDLDataFrame
 }
 
 private[smartdatalake] case class SparkSDLDataFrame(dataFrame: SparkDataFrame) extends SDLDataFrame {
+  override def showString: String = DatasetHelper.showString(dataFrame)
+
+  override def apply(colName: String): SDLColumn = dataFrame(colName)
+
+  override def lit(value: Any): SDLColumn = dataFrame.lit(value)
+
   override def columns: Seq[String] = dataFrame.columns
 
-  override def select(colsToSelect: Seq[SDLColumn]): SparkSDLDataFrame = {
-    val colsToSelectTyped: Seq[SparkColumn] = colsToSelect
-    val dfResult: SparkDataFrame = dataFrame.select(colsToSelectTyped: _*)
-    SparkSDLDataFrame(dfResult)
+  override def filter(column: SDLColumn): SDLDataFrame = dataFrame.filter(column.column.asInstanceOf[SparkColumn])
+
+  override def select(colsToSelect: SDLColumn*): SDLDataFrame = dataFrame.select(colsToSelect.map(col => col.column.asInstanceOf[SparkColumn]): _*)
+
+  override def select(colNamesToSelect: Array[String]): SDLDataFrame =
+    dataFrame.select(colNamesToSelect.map(org.apache.spark.sql.functions.col): _*)
+
+  override def withColumn(colName: String, column: SDLColumn): SDLDataFrame =
+    dataFrame.withColumn(colName, column.column.asInstanceOf[SparkColumn])
+
+  override def as(alias: String): SDLDataFrame = dataFrame.as(alias)
+
+  override def join(sdlDataFrame: SDLDataFrame, joinCols: Seq[SDLColumn], joinType: String): SDLDataFrame =
+    dataFrame.join(sdlDataFrame, joinCols, joinType)
+
+  override def union(sdlDataFrame: SDLDataFrame): SDLDataFrame = dataFrame.union(sdlDataFrame)
+
+  override def schema: SDLStructType = SparkSDLStructType(dataFrame.schema)
+
+  override def count: Long = dataFrame.count
+
+  override def array(columns: SDLColumn*): SDLColumn = {
+    val sparkColumns: Seq[SparkColumn] = columns
+    org.apache.spark.sql.functions.array(sparkColumns: _*)
   }
 
-  override def select(colNamesToSelect: Array[String]): SDLDataFrame = {
-    val dfResult: SparkDataFrame = dataFrame.select(colNamesToSelect.map(org.apache.spark.sql.functions.col): _*)
-    SparkSDLDataFrame(dfResult)
+  override def struct(columns: SDLColumn*): SDLColumn = {
+    val sparkColumns: Seq[SparkColumn] = columns
+    org.apache.spark.sql.functions.struct(sparkColumns: _*)
   }
 
-  override def schema: SDLStructType = {
-    SparkSDLStructType(dataFrame.schema)
+  def when(condition: SDLColumn, value: Any): SDLColumn = org.apache.spark.sql.functions.when(condition, value)
+
+  override def explode(column: SDLColumn, newColumName: String, outer: Boolean): SDLDataFrame = {
+    val explodedColumn =
+      if (outer) {
+        org.apache.spark.sql.functions.explode_outer(column)
+      }
+      else {
+        org.apache.spark.sql.functions.explode_outer(column)
+      }
+
+    dataFrame.withColumn(newColumName, explodedColumn)
   }
+
+  override def drop(colName: String): SDLDataFrame = dataFrame.drop(colName)
+
+  override def drop(column: SDLColumn): SDLDataFrame = dataFrame.drop(column)
 }
 
 private[smartdatalake] case class SnowparkSDLDataFrame(dataFrame: SnowparkDataFrame) extends SDLDataFrame {
+  override def showString: String = SnowparkHelper.RichDataFrame(dataFrame).publicShowString
+
+  override def apply(colName: String): SDLColumn = dataFrame(colName)
+
   override def columns: Seq[String] = dataFrame.schema.map(column => column.name)
 
-  override def select(colsToSelect: Seq[SDLColumn]): SnowparkSDLDataFrame = {
-    val colsToSelectTyped: Seq[SnowparkColumn] = colsToSelect
-    val dfResult: SnowparkDataFrame = dataFrame.select(colsToSelectTyped)
-    SnowparkSDLDataFrame(dfResult)
+  override def filter(column: SDLColumn): SDLDataFrame = dataFrame.filter(column.column.asInstanceOf[SnowparkColumn])
+
+  override def select(colsToSelect: SDLColumn*): SDLDataFrame = dataFrame.select(colsToSelect)
+
+  override def select(colNamesToSelect: Array[String]): SDLDataFrame =
+    dataFrame.select(colNamesToSelect.map(com.snowflake.snowpark.functions.col))
+
+  override def withColumn(colName: String, column: SDLColumn): SDLDataFrame =
+    dataFrame.withColumn(colName, column.column.asInstanceOf[SnowparkColumn])
+
+  // DataFrame aliases are not in the Snowpark API (there is no DataFrame.as method).
+  // I think renaming all columns with a prefix will achieve the same thing
+  override def as(alias: String): SDLDataFrame = {
+    val colNamesAndAliases: Seq[(String, String)] = dataFrame.schema.names.map(colName => (colName, s"$alias.$colName"))
+    val renameColumnFunctions: Seq[SnowparkDataFrame => SnowparkDataFrame] = colNamesAndAliases.map(nameAndAlias =>
+      (df: SnowparkDataFrame) => df.rename(nameAndAlias._2, df(nameAndAlias._1)))
+    renameColumnFunctions.foldLeft(dataFrame) {
+      (previousResult, renameColumnFunction) => renameColumnFunction(previousResult)
+    }
   }
 
-  override def select(colNamesToSelect: Array[String]): SDLDataFrame = {
-    val columnsToSelect: Array[SnowparkColumn] = colNamesToSelect.map(com.snowflake.snowpark.functions.col)
-    val dfResult: SnowparkDataFrame = dataFrame.select(columnsToSelect)
-    SnowparkSDLDataFrame(dfResult)
+  override def join(sdlDataFrame: SDLDataFrame, joinCols: Seq[SDLColumn], joinType: String): SDLDataFrame =
+    dataFrame.join(sdlDataFrame, joinCols, joinType)
+
+  override def union(sdlDataFrame: SDLDataFrame): SDLDataFrame = dataFrame.union(sdlDataFrame)
+
+  override def schema: SDLStructType = dataFrame.schema
+
+  override def count: Long = dataFrame.count
+
+  override def array(columns: SDLColumn*): SDLColumn =
+    com.snowflake.snowpark.functions.array_construct(columns.map(column => column): _*)
+
+  override def struct(columns: SDLColumn*): SDLColumn =
+    com.snowflake.snowpark.functions.object_construct(columns.map(column => column): _*)
+
+  def when(condition: SDLColumn, value: Any): SDLColumn =
+    com.snowflake.snowpark.functions.when(condition, com.snowflake.snowpark.functions.lit(value))
+
+  override def explode(column: SDLColumn, newColumnName: String, outer: Boolean): SDLDataFrame = {
+    val dfJoined = dataFrame.join(com.snowflake.snowpark.tableFunctions.flatten,
+      Map(
+        "input" -> column.column.asInstanceOf[SnowparkColumn],
+        "outer" -> com.snowflake.snowpark.functions.lit(outer),
+        "mode" -> com.snowflake.snowpark.functions.lit("array")
+      )
+    )
+
+    dfJoined.rename(newColumnName, dfJoined("VALUE")).drop("SEQ", "KEY", "PATH", "INDEX", "THIS")
   }
 
-  override def schema: SDLStructType = {
-    SnowparkSDLStructType(dataFrame.schema)
-  }
+  override def lit(value: Any): SDLColumn = dataFrame.lit(value)
+
+  override def drop(colName: String): SDLDataFrame = dataFrame.drop(colName)
+
+  override def drop(column: SDLColumn): SDLDataFrame = dataFrame.drop(column)
 }
 
