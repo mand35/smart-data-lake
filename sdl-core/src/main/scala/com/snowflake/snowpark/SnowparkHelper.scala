@@ -1,5 +1,3 @@
-import io.smartdatalake.dataframe.SnowparkStructType
-
 /*
  * Smart Data Lake - Build your data lake the smart way.
  *
@@ -21,16 +19,16 @@ import io.smartdatalake.dataframe.SnowparkStructType
 
 package com.snowflake.snowpark {
 
-  import io.smartdatalake.dataframe.SnowparkDataFrame
+  import com.snowflake.snowpark.types.StructType
 
   object SnowparkHelper {
-    implicit class RichStructType(structType: SnowparkStructType) {
+    implicit class RichStructType(structType: StructType) {
       def publicTreeString: String = {
         structType.treeString(100)
       }
     }
 
-    implicit class RichDataFrame(dataFrame: SnowparkDataFrame) {
+    implicit class RichDataFrame(dataFrame: DataFrame) {
       def publicShowString: String = {
         dataFrame.showString(100)
       }
