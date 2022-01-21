@@ -24,10 +24,9 @@ import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
 import io.smartdatalake.definitions.{Condition, ExecutionMode, SparkStreamingMode}
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.workflow.action.customlogic.CustomDfsTransformerConfig
-import io.smartdatalake.workflow.action.sparktransformer.{ParsableDfsTransformer, SQLDfsTransformer}
+import io.smartdatalake.workflow.action.sparktransformer.{GenericDfsTransformer, SQLDfsTransformer}
 import io.smartdatalake.workflow.dataobject.{CanCreateDataFrame, CanWriteDataFrame, DataObject}
-import io.smartdatalake.workflow.{ActionPipelineContext, SparkSubFeed}
-import org.apache.spark.sql.SparkSession
+import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed}
 
 /**
  * [[Action]] to transform data according to a custom transformer.
@@ -45,11 +44,12 @@ import org.apache.spark.sql.SparkSession
  * @param recursiveInputIds      output of action that are used as input in the same action
  * @param inputIdsToIgnoreFilter optional list of input ids to ignore filter (partition values & filter clause)
  */
+// TODO: should be renamed to CustomDataFrameAction
 case class CustomSparkAction (override val id: ActionId,
                               inputIds: Seq[DataObjectId],
                               outputIds: Seq[DataObjectId],
                               transformer: Option[CustomDfsTransformerConfig] = None,
-                              transformers: Seq[ParsableDfsTransformer] = Seq(),
+                              transformers: Seq[GenericDfsTransformer] = Seq(),
                               override val breakDataFrameLineage: Boolean = false,
                               override val persist: Boolean = false,
                               override val mainInputId: Option[DataObjectId] = None,
@@ -60,7 +60,7 @@ case class CustomSparkAction (override val id: ActionId,
                               override val metadata: Option[ActionMetadata] = None,
                               recursiveInputIds: Seq[DataObjectId] = Seq(),
                               override val inputIdsToIgnoreFilter: Seq[DataObjectId] = Seq()
-                             )(implicit instanceRegistry: InstanceRegistry) extends SparkActionImpl {
+                             )(implicit instanceRegistry: InstanceRegistry) extends DataFrameActionImpl {
 
   override val recursiveInputs: Seq[DataObject with CanCreateDataFrame] = recursiveInputIds.map(getInputDataObject[DataObject with CanCreateDataFrame])
   override val inputs: Seq[DataObject with CanCreateDataFrame] = inputIds.map(getInputDataObject[DataObject with CanCreateDataFrame])
@@ -71,7 +71,7 @@ case class CustomSparkAction (override val id: ActionId,
 
   validateConfig()
 
-  override def transform(inputSubFeeds: Seq[SparkSubFeed], outputSubFeeds: Seq[SparkSubFeed])(implicit context: ActionPipelineContext): Seq[SparkSubFeed] = {
+  override def transform(inputSubFeeds: Seq[DataFrameSubFeed], outputSubFeeds: Seq[DataFrameSubFeed])(implicit context: ActionPipelineContext): Seq[DataFrameSubFeed] = {
     val partitionValues = getMainPartitionValues(inputSubFeeds)
     applyTransformers(transformers ++ transformer.map(_.impl), partitionValues, inputSubFeeds, outputSubFeeds)
   }

@@ -23,13 +23,15 @@ import com.snowflake.snowpark.Session
 import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ConnectionId, DataObjectId}
 import io.smartdatalake.config.{ConfigurationException, FromConfigFactory, InstanceRegistry}
+import io.smartdatalake.dataframe.SnowparkLanguageImplementation.SnowparkDataFrame
+import io.smartdatalake.dataframe.SparkLanguageImplementation.{SparkDataFrame, SparkStructType}
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.definitions.{SDLSaveMode, SaveModeOptions}
-import io.smartdatalake.smartdatalake.{SnowparkDataFrame, SnowparkStructType, SparkDataFrame, SparkStructType}
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
-import io.smartdatalake.workflow.ActionPipelineContext
+import io.smartdatalake.workflow.SubFeed.GenericDataFrameSubFeed
 import io.smartdatalake.workflow.connection.SnowflakeConnection
+import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed, SnowparkSubFeed, SparkSubFeed}
 import net.snowflake.spark.snowflake.Utils.SNOWFLAKE_SOURCE_NAME
 
 /**
@@ -45,6 +47,7 @@ import net.snowflake.spark.snowflake.Utils.SNOWFLAKE_SOURCE_NAME
  * @param comment      An optional comment to add to the table after writing a DataFrame to it
  * @param metadata     meta data
  */
+// TODO: we should add virtual partitions as for JdbcTableDataObject and KafkaDataObject, so that PartitionDiffMode can be used...
 case class SnowflakeTableDataObject(override val id: DataObjectId,
                                     override var table: Table,
                                     override val schemaMin: Option[SparkStructType] = None,
@@ -53,9 +56,7 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
                                     comment: Option[String] = None,
                                     override val metadata: Option[DataObjectMetadata] = None)
                                    (@transient implicit val instanceRegistry: InstanceRegistry)
-  extends TransactionalSparkTableDataObject
-    with CanCreateSnowparkDataFrame
-    with CanWriteSnowparkDataFrame {
+  extends TransactionalSparkTableDataObject {
 
   private val connection = getConnection[SnowflakeConnection](connectionId)
 
@@ -98,6 +99,22 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
     }
   }
 
+  private[smartdatalake] override def getSubFeed(partitionValues: Seq[PartitionValues] = Seq(), subFeedType: Class[_])(implicit context: ActionPipelineContext): GenericDataFrameSubFeed = {
+    subFeedType match {
+      case t if t == classOf[SparkSubFeed] => SparkSubFeed(Some(getDataFrame(partitionValues)), id, partitionValues)
+      case t if t == classOf[SnowparkSubFeed] => SnowparkSubFeed(Some(getSnowparkDataFrame()), id, partitionValues)
+    }
+  }
+  private[smartdatalake] override def getSubFeedSupportedTypes: Seq[Class[_]] = Seq(classOf[SparkSubFeed], classOf[SnowparkSubFeed])
+
+  private[smartdatalake] override def writeSubFeed(subFeed: GenericDataFrameSubFeed, partitionValues: Seq[PartitionValues], isRecursiveInput: Boolean, saveModeOptions: Option[SaveModeOptions])(implicit context: ActionPipelineContext): Unit = {
+    subFeed match {
+      case sparkSubFeed: SparkSubFeed => writeDataFrame(sparkSubFeed.dataFrame.get, partitionValues, isRecursiveInput, saveModeOptions)
+      case sfSubFeed: SnowparkSubFeed => writeSnowparkDataFrame(sfSubFeed.dataFrame.get, isRecursiveInput, saveModeOptions)
+    }
+  }
+  private[smartdatalake] override def writeSubFeedSupportedTypes: Seq[Class[_]] = Seq(classOf[SparkSubFeed], classOf[SnowparkSubFeed])
+
   override def isDbExisting(implicit context: ActionPipelineContext): Boolean = {
     val sql = s"SHOW DATABASES LIKE '${connection.database}'"
     connection.execSnowflakeStatement(sql).next()
@@ -112,14 +129,19 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
 
   override def factory: FromConfigFactory[DataObject] = SnowflakeTableDataObject
 
-  // Read the contents of a table as a Snowpark DataFrame
-  override def getSnowparkDataFrame()(implicit context: ActionPipelineContext): SnowparkDataFrame = {
+  /**
+   * Read the contents of a table as a Snowpark DataFrame
+   */
+  def getSnowparkDataFrame()(implicit context: ActionPipelineContext): SnowparkDataFrame = {
     this.session.table(table.fullName)
   }
 
-  // Write a Snowpark DataFrame to Snowflake, used in Snowpark actions
+  /**
+   * Write a Snowpark DataFrame to Snowflake, used in Snowpark actions
+   */
   def writeSnowparkDataFrame(df: SnowparkDataFrame, isRecursiveInput: Boolean = false, saveModeOptions: Option[SaveModeOptions] = None)
                             (implicit context: ActionPipelineContext): Unit = {
+    // TODO: implement saveMode & isRecursiveInput...
     df.write.saveAsTable(table.fullName)
   }
 }
@@ -129,15 +151,4 @@ object SnowflakeTableDataObject extends FromConfigFactory[DataObject] {
                          (implicit instanceRegistry: InstanceRegistry): SnowflakeTableDataObject = {
     extract[SnowflakeTableDataObject](config)
   }
-}
-
-private[smartdatalake] trait CanCreateSnowparkDataFrame {
-  def getSnowparkDataFrame()(implicit context: ActionPipelineContext): SnowparkDataFrame
-}
-
-private[smartdatalake] trait CanWriteSnowparkDataFrame {
-  def writeSnowparkDataFrame(df: SnowparkDataFrame,
-                             isRecursiveInput: Boolean = false,
-                             saveModeOptions: Option[SaveModeOptions] = None)
-                            (implicit context: ActionPipelineContext): Unit
 }

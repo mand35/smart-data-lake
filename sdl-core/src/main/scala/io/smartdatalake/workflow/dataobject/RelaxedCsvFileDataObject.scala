@@ -4,6 +4,7 @@ import com.typesafe.config.Config
 import com.univocity.parsers.csv.CsvParser
 import io.smartdatalake.config.SdlConfigObject.{ConnectionId, DataObjectId}
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
+import io.smartdatalake.dataframe.DomainSpecificLanguage.GenericSchema
 import io.smartdatalake.definitions.DateColumnType.DateColumnType
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.definitions.{DateColumnType, SDLSaveMode}
@@ -60,8 +61,8 @@ case class RelaxedCsvFileDataObject(override val id: DataObjectId,
                                     override val path: String,
                                     csvOptions: Map[String, String] = Map(),
                                     override val partitions: Seq[String] = Seq(),
-                                    override val schema: Option[StructType] = None,
-                                    override val schemaMin: Option[StructType] = None,
+                                    override val schema: Option[GenericSchema] = None,
+                                    override val schemaMin: Option[GenericSchema] = None,
                                     dateColumnType: DateColumnType = DateColumnType.Date,
                                     treatMissingColumnsAsCorrupt: Boolean = false,
                                     treatSuperfluousColumnsAsCorrupt: Boolean = false,

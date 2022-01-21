@@ -79,7 +79,7 @@ class ActionDAGTest extends FunSuite with BeforeAndAfter {
     srcDO.writeDataFrame(l1, Seq())
     val action1 = DeduplicateAction("a", srcDO.id, tgt1DO.id, metricsFailCondition = Some(s"dataObjectId = '${tgt1DO.id.id}' and key = 'records_written' and value = 0"))
     val action2 = CopyAction("b", tgt1DO.id, tgt2DO.id)
-    val actions: Seq[SparkOneToOneActionImpl] = Seq(action1, action2)
+    val actions: Seq[DataFrameOneToOneActionImpl] = Seq(action1, action2)
     val stateStore = HadoopFileActionDAGRunStateStore(statePath, contextInit.application, defaultHadoopConf)
     val dag: ActionDAGRun = ActionDAGRun(actions, stateStore = Some(stateStore))
 
@@ -137,7 +137,7 @@ class ActionDAGTest extends FunSuite with BeforeAndAfter {
     srcDO.writeDataFrame(l1, Seq())
     val action1 = DeduplicateAction("a", srcDO.id, tgt1DO.id)
     val action2 = CopyAction("b", tgt1DO.id, tgt2DO.id, breakDataFrameLineage = true)
-    val actions: Seq[SparkOneToOneActionImpl] = Seq(action1, action2)
+    val actions: Seq[DataFrameOneToOneActionImpl] = Seq(action1, action2)
     val dag: ActionDAGRun = ActionDAGRun(actions)
 
     // exec dag
@@ -606,7 +606,7 @@ class ActionDAGTest extends FunSuite with BeforeAndAfter {
       selectExpression = Some("slice(selectedOutputPartitionValues,-1,1)"), // only one partition: last partition first
       failCondition = Some("size(selectedOutputPartitionValues) = 0 and size(outputPartitionValues) = 0")
     )
-    val actions: Seq[SparkOneToOneActionImpl] = Seq(
+    val actions: Seq[DataFrameOneToOneActionImpl] = Seq(
       DeduplicateAction("a", srcDO.id, tgt1DO.id, executionMode = Some(partitionDiffMode))
       , CopyAction("b", tgt1DO.id, tgt2DO.id)
     )
@@ -657,7 +657,7 @@ class ActionDAGTest extends FunSuite with BeforeAndAfter {
     tgt1DO.dropTable
     instanceRegistry.register(tgt1DO)
 
-    val actions: Seq[SparkOneToOneActionImpl] = Seq(
+    val actions: Seq[DataFrameOneToOneActionImpl] = Seq(
       CopyAction("a", srcDO.id, tgt1DO.id)
     )
     val df1 = Seq(("doe","john",5)).toDF("lastname", "firstname", "rating")
@@ -697,7 +697,7 @@ class ActionDAGTest extends FunSuite with BeforeAndAfter {
     val expectedPartitions = Seq(PartitionValues(Map("lastname"->"doe")))
     srcDO.writeDataFrame(df1, expectedPartitions)
     tgt1DO.writeDataFrame(df1, expectedPartitions)
-    val actions: Seq[SparkOneToOneActionImpl] = Seq(
+    val actions: Seq[DataFrameOneToOneActionImpl] = Seq(
       CopyAction("a", srcDO.id, tgt1DO.id, executionMode = Some(PartitionDiffMode(alternativeOutputId = Some(tgt2DO.id))))
       , CopyAction("b", tgt1DO.id, tgt2DO.id, deleteDataAfterRead = true)
     )
@@ -1222,7 +1222,7 @@ class ActionDAGTest extends FunSuite with BeforeAndAfter {
     val df1 = Seq[(String,String,Int)]().toDF("lastname", "firstname", "rating")
     val expectedPartitions = Seq(PartitionValues(Map("lastname"->"doe")))
     srcDO.writeDataFrame(df1, expectedPartitions)
-    val actions: Seq[SparkOneToOneActionImpl] = Seq(
+    val actions: Seq[DataFrameOneToOneActionImpl] = Seq(
       CopyAction("a", srcDO.id, tgt1DO.id)
     )
     val dag: ActionDAGRun = ActionDAGRun(actions)
@@ -1251,7 +1251,7 @@ class ActionDAGTest extends FunSuite with BeforeAndAfter {
     val df1 = Seq(("doe","john",5)).toDF("lastname", "firstname", "rating")
     val expectedPartitions = Seq(PartitionValues(Map("lastname"->"doe")))
     srcDO.writeDataFrame(df1, expectedPartitions)
-    val actions: Seq[SparkOneToOneActionImpl] = Seq(
+    val actions: Seq[DataFrameOneToOneActionImpl] = Seq(
       CopyAction("a", srcDO.id, tgt1DO.id, executionMode = Some(PartitionDiffMode()))
       , CopyAction("b", tgt1DO.id, tgt2DO.id)
     )

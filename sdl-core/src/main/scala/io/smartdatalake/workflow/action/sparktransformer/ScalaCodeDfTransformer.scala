@@ -42,7 +42,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
  * @param runtimeOptions optional tuples of [key, spark sql expression] to be added as additional options when executing transformation.
  *                       The spark sql expressions are evaluated against an instance of [[DefaultExpressionData]].
  */
-case class ScalaCodeDfTransformer(override val name: String = "scalaTransform", override val description: Option[String] = None, code: Option[String] = None, file: Option[String] = None, options: Map[String, String] = Map(), runtimeOptions: Map[String, String] = Map()) extends OptionsDfTransformer {
+case class ScalaCodeDfTransformer(override val name: String = "scalaTransform", override val description: Option[String] = None, code: Option[String] = None, file: Option[String] = None, options: Map[String, String] = Map(), runtimeOptions: Map[String, String] = Map()) extends OptionsSparkDfTransformer {
   private val fnTransform = {
     implicit val defaultHadoopConf: Configuration = new Configuration()
     file.map(file => CustomCodeUtil.compileCode[fnTransformType](HdfsUtil.readHadoopFile(file)))
@@ -52,10 +52,10 @@ case class ScalaCodeDfTransformer(override val name: String = "scalaTransform", 
   override def transformWithOptions(actionId: ActionId, partitionValues: Seq[PartitionValues], df: DataFrame, dataObjectId: DataObjectId, options: Map[String, String])(implicit context: ActionPipelineContext): DataFrame = {
     fnTransform(context.sparkSession, options, df, dataObjectId.id)
   }
-  override def factory: FromConfigFactory[ParsableDfTransformer] = ScalaCodeDfTransformer
+  override def factory: FromConfigFactory[GenericDfTransformer] = ScalaCodeDfTransformer
 }
 
-object ScalaCodeDfTransformer extends FromConfigFactory[ParsableDfTransformer] {
+object ScalaCodeDfTransformer extends FromConfigFactory[GenericDfTransformer] {
   override def fromConfig(config: Config)(implicit instanceRegistry: InstanceRegistry): ScalaCodeDfTransformer = {
     extract[ScalaCodeDfTransformer](config)
   }

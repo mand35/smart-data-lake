@@ -21,6 +21,7 @@ package io.smartdatalake.workflow.dataobject
 import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ConnectionId, DataObjectId}
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
+import io.smartdatalake.dataframe.DomainSpecificLanguage.GenericSchema
 import io.smartdatalake.definitions.DateColumnType.DateColumnType
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.definitions.{DateColumnType, SDLSaveMode}
@@ -75,8 +76,8 @@ case class CsvFileDataObject( override val id: DataObjectId,
                               override val path: String,
                               csvOptions: Map[String, String] = Map(),
                               override val partitions: Seq[String] = Seq(),
-                              override val schema: Option[StructType] = None,
-                              override val schemaMin: Option[StructType] = None,
+                              override val schema: Option[GenericSchema] = None,
+                              override val schemaMin: Option[GenericSchema] = None,
                               dateColumnType: DateColumnType = DateColumnType.Date,
                               override val saveMode: SDLSaveMode = SDLSaveMode.Overwrite,
                               override val sparkRepartition: Option[SparkRepartitionDef] = None,
@@ -87,7 +88,7 @@ case class CsvFileDataObject( override val id: DataObjectId,
                               override val housekeepingMode: Option[HousekeepingMode] = None,
                               override val metadata: Option[DataObjectMetadata] = None
                             )(@transient implicit override val instanceRegistry: InstanceRegistry)
-  extends SparkFileDataObject with CanCreateDataFrame with CanWriteDataFrame {
+  extends SparkFileDataObject {
 
   override val format = "com.databricks.spark.csv"
 

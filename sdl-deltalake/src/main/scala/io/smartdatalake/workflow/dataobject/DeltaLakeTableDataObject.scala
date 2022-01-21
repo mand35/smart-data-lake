@@ -248,7 +248,7 @@ case class DeltaLakeTableDataObject(override val id: DataObjectId,
           if (finalSaveMode == SDLSaveMode.Overwrite) {
             if (partitionValues.isEmpty) throw new ProcessingLogicException(s"($id) Overwrite without partition values is not allowed on a partitioned DataObject. This is a protection from unintentionally deleting all partition data.")
             dfWriter
-              .option("replaceWhere", partitionValues.map(_.getSparkExpr).reduce(_ or _).expr.sql)
+              .option("replaceWhere", partitionValues.map(_.getFilterExpr).reduce(_ or _).expr.sql)
               .option("mergeSchema", allowSchemaEvolution)
               .mode(finalSaveMode.asSparkSaveMode)
               .save() // atomic replace (replaceWhere) doesn't work with Table API
@@ -373,7 +373,7 @@ case class DeltaLakeTableDataObject(override val id: DataObjectId,
    */
   override def deletePartitions(partitionValues: Seq[PartitionValues])(implicit context: ActionPipelineContext): Unit = {
     val deltaTable = DeltaTable.forName(context.sparkSession, table.fullName)
-    partitionValues.map(_.getSparkExpr).foreach(expr => deltaTable.delete(expr))
+    partitionValues.map(_.getFilterExpr).foreach(expr => deltaTable.delete(expr))
   }
 
   override def dropTable(implicit context: ActionPipelineContext): Unit = {

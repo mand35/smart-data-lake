@@ -19,31 +19,32 @@
 
 package io.smartdatalake.workflow.action.sparktransformer
 
-import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.ActionId
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
+import io.smartdatalake.dataframe.GenericDataFrame
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.util.misc.{CustomCodeUtil, DefaultExpressionData}
-import io.smartdatalake.workflow.ActionPipelineContext
-import io.smartdatalake.workflow.action.customlogic.CustomDfsTransformer
+import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed}
+import io.smartdatalake.workflow.action.customlogic.{CustomDfsTransformer, CustomGenericDfsTransformer}
 import org.apache.spark.sql.DataFrame
 
 /**
  * Configuration of a custom Spark-DataFrame transformation between many inputs and many outputs (n:m)
  * Define a transform function which receives a map of input DataObjectIds with DataFrames and a map of options and as
- * to return a map of output DataObjectIds with DataFrames, see also trait [[CustomDfsTransformer]].
+ * to return a map of output DataObjectIds with DataFrames, see also trait [[CustomGenericDfsTransformer]].
  *
  * @param name           name of the transformer
  * @param description    Optional description of the transformer
- * @param className      class name implementing trait [[CustomDfsTransformer]]
+ * @param className      class name implementing trait [[CustomGenericDfsTransformer]]
  * @param options        Options to pass to the transformation
  * @param runtimeOptions optional tuples of [key, spark sql expression] to be added as additional options when executing transformation.
  *                       The spark sql expressions are evaluated against an instance of [[DefaultExpressionData]].
  */
-case class ScalaClassDfsTransformer(override val name: String = "scalaTransform", override val description: Option[String] = None, className: String, options: Map[String, String] = Map(), runtimeOptions: Map[String, String] = Map()) extends OptionsSparkDfsTransformer {
-  private val customTransformer = CustomCodeUtil.getClassInstanceByName[CustomDfsTransformer](className)
-  override def transformSparkWithOptions(actionId: ActionId, partitionValues: Seq[PartitionValues], dfs: Map[String,DataFrame], options: Map[String, String])(implicit context: ActionPipelineContext): Map[String,DataFrame] = {
-    customTransformer.transform(context.sparkSession, options, dfs)
+case class ScalaClassGenericDfsTransformer(override val name: String = "scalaTransform", override val description: Option[String] = None, className: String, options: Map[String, String] = Map(), runtimeOptions: Map[String, String] = Map()) extends OptionsGenericDfsTransformer {
+  private val customTransformer = CustomCodeUtil.getClassInstanceByName[CustomGenericDfsTransformer](className)
+  override def transformWithOptions(actionId: ActionId, partitionValues: Seq[PartitionValues], dfs: Map[String,GenericDataFrame], options: Map[String, String])(implicit context: ActionPipelineContext): Map[String,GenericDataFrame] = {
+    val helper = DataFrameSubFeed.getHelper(dfs.values.head.subFeedType)
+    customTransformer.transform(helper, options, dfs)
   }
   override def transformPartitionValuesWithOptions(actionId: ActionId, partitionValues: Seq[PartitionValues], options: Map[String, String])(implicit context: ActionPipelineContext): Option[Map[PartitionValues,PartitionValues]] = {
    customTransformer.transformPartitionValues(options, partitionValues)
@@ -52,8 +53,4 @@ case class ScalaClassDfsTransformer(override val name: String = "scalaTransform"
 }
 
 
-object ScalaClassDfsTransformer extends FromConfigFactory[GenericDfsTransformer] {
-  override def fromConfig(config: Config)(implicit instanceRegistry: InstanceRegistry): ScalaClassDfsTransformer = {
-    extract[ScalaClassDfsTransformer](config)
-  }
-}
+

@@ -28,20 +28,20 @@ import io.smartdatalake.workflow.ActionPipelineContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 /**
- * Standardize datatypes of a DataFrame.
+ * Standardize datatypes of a Spark-DataFrame.
  * Current implementation converts all decimal datatypes to a corresponding integral or float datatype
  *
  * @param name         name of the transformer
  * @param description  Optional description of the transformer
  */
-case class StandardizeDatatypesTransformer(override val name: String = "standardizeDatatypes", override val description: Option[String] = None) extends ParsableDfTransformer {
+case class StandardizeDatatypesTransformer(override val name: String = "standardizeDatatypes", override val description: Option[String] = None) extends SparkDfTransformer {
   override def transform(actionId: ActionId, partitionValues: Seq[PartitionValues], df: DataFrame, dataObjectId: DataObjectId)(implicit context: ActionPipelineContext): DataFrame = {
     df.castAllDecimal2IntegralFloat
   }
-  override def factory: FromConfigFactory[ParsableDfTransformer] = StandardizeDatatypesTransformer
+  override def factory: FromConfigFactory[GenericDfTransformer] = StandardizeDatatypesTransformer
 }
 
-object StandardizeDatatypesTransformer extends FromConfigFactory[ParsableDfTransformer] {
+object StandardizeDatatypesTransformer extends FromConfigFactory[GenericDfTransformer] {
   override def fromConfig(config: Config)(implicit instanceRegistry: InstanceRegistry): StandardizeDatatypesTransformer = {
     extract[StandardizeDatatypesTransformer](config)
   }

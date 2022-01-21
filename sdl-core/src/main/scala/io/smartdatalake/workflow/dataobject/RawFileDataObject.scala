@@ -21,6 +21,7 @@ package io.smartdatalake.workflow.dataobject
 import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ConnectionId, DataObjectId}
 import io.smartdatalake.config.{ConfigurationException, FromConfigFactory, InstanceRegistry}
+import io.smartdatalake.dataframe.DomainSpecificLanguage.GenericSchema
 import io.smartdatalake.definitions.SDLSaveMode
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.util.hdfs.{PartitionValues, SparkRepartitionDef}
@@ -49,8 +50,8 @@ case class RawFileDataObject( override val id: DataObjectId,
                               override val options: Map[String, String] = Map(),
                               override val fileName: String = "*",
                               override val partitions: Seq[String] = Seq(),
-                              override val schema: Option[StructType] = None,
-                              override val schemaMin: Option[StructType] = None,
+                              override val schema: Option[GenericSchema] = None,
+                              override val schemaMin: Option[GenericSchema] = None,
                               override val saveMode: SDLSaveMode = SDLSaveMode.Overwrite,
                               override val sparkRepartition: Option[SparkRepartitionDef] = None,
                               override val acl: Option[AclDef] = None,
@@ -60,7 +61,7 @@ case class RawFileDataObject( override val id: DataObjectId,
                               override val housekeepingMode: Option[HousekeepingMode] = None,
                               override val metadata: Option[DataObjectMetadata] = None
                             )(@transient implicit override val instanceRegistry: InstanceRegistry)
-  extends SparkFileDataObject with CanCreateDataFrame with CanWriteDataFrame {
+  extends SparkFileDataObject {
 
   override def format: String = customFormat.getOrElse(throw ConfigurationException(s"($id) set attribute customFormat if you want to read/write this a RawFileDataObject with Spark"))
 

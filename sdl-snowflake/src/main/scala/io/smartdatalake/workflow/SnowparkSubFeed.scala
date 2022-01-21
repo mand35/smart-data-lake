@@ -21,15 +21,18 @@ package io.smartdatalake.workflow
 
 import com.snowflake.snowpark.DataFrame
 import io.smartdatalake.config.SdlConfigObject.DataObjectId
+import io.smartdatalake.dataframe.SnowparkLanguageImplementation
+import io.smartdatalake.dataframe.SnowparkLanguageImplementation.{SnowparkColumn, SnowparkDataFrame, SnowparkDataType, SnowparkLanguageType, SnowparkStructField, SnowparkStructType}
 import io.smartdatalake.definitions.ExecutionModeResult
 import io.smartdatalake.util.hdfs.PartitionValues
 
-case class SnowparkSubFeed(@transient dataFrame: Option[DataFrame],
+case class SnowparkSubFeed(@transient override val dataFrame: Option[DataFrame],
                            override val dataObjectId: DataObjectId,
                            override val partitionValues: Seq[PartitionValues],
                            override val isDAGStart: Boolean = false,
                            override val isSkipped: Boolean = false)
-  extends SubFeed {
+  extends DataFrameSubFeed[SnowparkDataFrame, SnowparkColumn, SnowparkStructType, SnowparkDataType] {
+  override def L: SnowparkLanguageType = SnowparkLanguageImplementation.language
 
   override def clearPartitionValues(breakLineageOnChange: Boolean = true)(implicit context: ActionPipelineContext): SnowparkSubFeed = {
     this.copy(partitionValues = Seq())
@@ -61,6 +64,11 @@ case class SnowparkSubFeed(@transient dataFrame: Option[DataFrame],
       this.copy(dataFrame = None,
         partitionValues = unionPartitionValues(subFeed.partitionValues),
         isDAGStart = this.isDAGStart || subFeed.isDAGStart)
+  }
+
+  override def persist: SnowparkSubFeed = {
+    logger.warn("Persist is not implemented by Snowpark")
+    this
   }
 
   override def applyExecutionModeResultForInput(result: ExecutionModeResult, mainInputId: DataObjectId)(implicit context: ActionPipelineContext): SnowparkSubFeed = {

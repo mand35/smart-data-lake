@@ -21,7 +21,7 @@ package io.smartdatalake.workflow.action.customlogic
 
 import com.typesafe.config.Config
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry, ParsableFromConfig}
-import io.smartdatalake.smartdatalake.SnowparkDataFrame
+import io.smartdatalake.dataframe.SnowparkLanguageImplementation.SnowparkDataFrame
 import io.smartdatalake.util.misc.CustomCodeUtil
 import io.smartdatalake.workflow.ActionPipelineContext
 

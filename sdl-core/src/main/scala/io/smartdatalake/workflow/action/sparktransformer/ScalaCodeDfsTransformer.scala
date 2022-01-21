@@ -43,20 +43,20 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
  * @param runtimeOptions optional tuples of [key, spark sql expression] to be added as additional options when executing transformation.
  *                       The spark sql expressions are evaluated against an instance of [[DefaultExpressionData]].
  */
-case class ScalaCodeDfsTransformer(override val name: String = "scalaTransform", override val description: Option[String] = None, code: Option[String] = None, file: Option[String] = None, options: Map[String, String] = Map(), runtimeOptions: Map[String, String] = Map()) extends OptionsDfsTransformer {
+case class ScalaCodeDfsTransformer(override val name: String = "scalaTransform", override val description: Option[String] = None, code: Option[String] = None, file: Option[String] = None, options: Map[String, String] = Map(), runtimeOptions: Map[String, String] = Map()) extends OptionsSparkDfsTransformer {
   private val fnTransform = {
     implicit val defaultHadoopConf: Configuration = new Configuration()
     file.map(file => CustomCodeUtil.compileCode[fnTransformType](HdfsUtil.readHadoopFile(file)))
       .orElse(code.map(code => CustomCodeUtil.compileCode[fnTransformType](code)))
       .getOrElse(throw ConfigurationException(s"Either file or code must be defined for ScalaCodeTransformer"))
   }
-  override def transformWithOptions(actionId: ActionId, partitionValues: Seq[PartitionValues], dfs: Map[String,DataFrame], options: Map[String, String])(implicit context: ActionPipelineContext): Map[String,DataFrame] = {
+  override def transformSparkWithOptions(actionId: ActionId, partitionValues: Seq[PartitionValues], dfs: Map[String,DataFrame], options: Map[String, String])(implicit context: ActionPipelineContext): Map[String,DataFrame] = {
     fnTransform(context.sparkSession, options, dfs)
   }
-  override def factory: FromConfigFactory[ParsableDfsTransformer] = ScalaCodeDfsTransformer
+  override def factory: FromConfigFactory[GenericDfsTransformer] = ScalaCodeDfsTransformer
 }
 
-object ScalaCodeDfsTransformer extends FromConfigFactory[ParsableDfsTransformer] {
+object ScalaCodeDfsTransformer extends FromConfigFactory[GenericDfsTransformer] {
   override def fromConfig(config: Config)(implicit instanceRegistry: InstanceRegistry): ScalaCodeDfsTransformer = {
     extract[ScalaCodeDfsTransformer](config)
   }

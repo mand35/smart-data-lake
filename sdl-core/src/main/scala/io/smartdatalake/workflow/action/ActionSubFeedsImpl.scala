@@ -24,12 +24,12 @@ import io.smartdatalake.config.SdlConfigObject.DataObjectId
 import io.smartdatalake.definitions.Environment
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.util.misc.{PerformanceUtils, ScalaUtil}
-import io.smartdatalake.workflow.dataobject.{CanHandlePartitions, DataObject, TransactionalSparkTableDataObject}
-import io.smartdatalake.workflow.{ActionPipelineContext, ExecutionPhase, GenericMetrics, SparkSubFeed, SubFeed, SubFeedConverter}
-import org.apache.spark.sql.SparkSession
+import io.smartdatalake.workflow.dataobject.{CanHandlePartitions, DataObject}
+import io.smartdatalake.workflow.spark.SparkSubFeed
+import io.smartdatalake.workflow._
 
-import scala.reflect.runtime.universe._
 import java.time.Duration
+import scala.reflect.runtime.universe._
 
 /**
  * Implementation of SubFeed handling.
