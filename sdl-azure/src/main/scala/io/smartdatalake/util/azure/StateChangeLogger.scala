@@ -133,13 +133,21 @@ class StateChangeLogger(options: Map[String,String]) extends StateListener with 
       }
 
     val full_list = list_of_list :+ last_list
-    full_list.foreach // and then handle each batch separately
-    {
-      logEvents =>
-        val jsonEvents = logEvents.map{le:StateLogEvent => gson.toJson(le)}.mkString(",")
-        logger.debug("logType " + logType+ " sending: " + jsonEvents.toString())
-        azureLogClient.send("[ " + jsonEvents + " ]", logType)
+    try {
+      full_list.foreach // and then handle each batch separately
+      {
+        logEvents =>
+          val jsonEvents = logEvents.map { le: StateLogEvent => gson.toJson(le) }.mkString(",")
+          logger.debug("logType " + logType + " sending: " + jsonEvents.toString())
+          azureLogClient.send("[ " + jsonEvents + " ]", logType)
+      }
+      logger.debug("sending completed")
     }
-    logger.debug("sending completed")
+    catch {
+      case ioe: java.io.IOException => {
+          logger.error("IOException while sending logs to Log Analytics " + ioe.getMessage, ioe)
+          logger.error("logs: " + full_list.toString())
+      }
+    }
   }
 }
