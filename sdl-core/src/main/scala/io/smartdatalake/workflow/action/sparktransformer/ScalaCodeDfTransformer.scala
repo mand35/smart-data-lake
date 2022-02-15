@@ -23,7 +23,8 @@ import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ActionId, DataObjectId}
 import io.smartdatalake.config.{ConfigurationException, FromConfigFactory, InstanceRegistry}
 import io.smartdatalake.util.hdfs.{HdfsUtil, PartitionValues}
-import io.smartdatalake.util.misc.{CustomCodeUtil, DefaultExpressionData}
+import io.smartdatalake.util.misc.CustomCodeUtil
+import io.smartdatalake.util.spark.DefaultExpressionData
 import io.smartdatalake.workflow.ActionPipelineContext
 import io.smartdatalake.workflow.action.customlogic.CustomDfTransformerConfig.fnTransformType
 import org.apache.hadoop.conf.Configuration

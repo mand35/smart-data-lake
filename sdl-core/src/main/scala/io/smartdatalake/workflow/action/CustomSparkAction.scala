@@ -24,9 +24,12 @@ import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
 import io.smartdatalake.definitions.{Condition, ExecutionMode, SparkStreamingMode}
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.workflow.action.customlogic.CustomDfsTransformerConfig
-import io.smartdatalake.workflow.action.sparktransformer.{GenericDfsTransformer, SQLDfsTransformer}
+import io.smartdatalake.workflow.action.sparktransformer.{GenericDfsTransformer, GenericDfsTransformerDef, SQLDfsTransformer}
 import io.smartdatalake.workflow.dataobject.{CanCreateDataFrame, CanWriteDataFrame, DataObject}
 import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed}
+
+import scala.reflect.runtime.universe
+import scala.reflect.runtime.universe.{Type, typeOf}
 
 /**
  * [[Action]] to transform data according to a custom transformer.
@@ -80,7 +83,18 @@ case class CustomSparkAction (override val id: ActionId,
     applyTransformers(transformers ++ transformer.map(_.impl).toSeq, partitionValues)
   }
 
+  private val transformerDefs: Seq[GenericDfsTransformerDef] = transformer.map(t => t.impl).toSeq ++ transformers
+
+  override val transformerSubFeedType: Option[Type] = {
+    val transformerTypeStats = transformerDefs.map(_.getSubFeedSupportedType)
+      .filterNot(_ =:= typeOf[DataFrameSubFeed]) // ignore generic transformers
+      .groupBy(identity).mapValues(_.size).toSeq.sortBy(_._2)
+    assert(transformerTypeStats.size <= 1, s"No common transformer subFeedType type found: ${transformerTypeStats.map{case (tpe,cnt) => s"${tpe.typeSymbol.name}: $cnt"}.mkString(",")}")
+    transformerTypeStats.map(_._1).headOption
+  }
+
   override def factory: FromConfigFactory[Action] = CustomSparkAction
+
 }
 
 

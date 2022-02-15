@@ -20,6 +20,7 @@ package io.smartdatalake.config
 
 import configs.{Config, ConfigError, ConfigKeyNaming, ConfigReader, Result}
 import io.smartdatalake.config.SdlConfigObject.{ActionId, ConnectionId, DataObjectId}
+import io.smartdatalake.dataframe.GenericSchema
 import io.smartdatalake.definitions.{AuthMode, Condition, Environment, ExecutionMode}
 import io.smartdatalake.util.hdfs.SparkRepartitionDef
 import io.smartdatalake.util.secrets.SecretProviderConfig
@@ -27,6 +28,7 @@ import io.smartdatalake.workflow.action.Action
 import io.smartdatalake.workflow.action.customlogic._
 import io.smartdatalake.workflow.action.script.ParsableScriptDef
 import io.smartdatalake.workflow.action.sparktransformer.{GenericDfTransformer, GenericDfsTransformer}
+import io.smartdatalake.dataframe.spark.SparkSchema
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 
@@ -48,6 +50,15 @@ trait ConfigImplicits {
    */
   implicit val structTypeReader: ConfigReader[StructType] = ConfigReader.fromTry { (c, p) =>
     StructType.fromDDL(c.getString(p))
+  }
+
+  /**
+   * A [[ConfigReader]] reader that reads [[GenericSchema]] values.
+   *
+   * This reader parses a Spark [[StructType]] from a DDL string and creates a SparkSchema.
+   */
+  implicit val genericSchemaReader: ConfigReader[GenericSchema] = ConfigReader.fromTry { (c, p) =>
+    SparkSchema(StructType.fromDDL(c.getString(p)))
   }
 
   /**

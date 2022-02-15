@@ -23,7 +23,7 @@ import io.smartdatalake.testutils.{DataObjectTestSuite, TestUtil}
 import io.smartdatalake.workflow.SparkSubFeed
 import io.smartdatalake.workflow.action.CopyAction
 import io.smartdatalake.workflow.connection.{DefaultJdbcCatalog, JdbcTableConnection}
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 
 class JdbcTableDataObjectTest extends DataObjectTestSuite {
 
@@ -32,7 +32,7 @@ class JdbcTableDataObjectTest extends DataObjectTestSuite {
   private val jdbcConnection = JdbcTableConnection("jdbcCon1", "jdbc:hsqldb:file:target/JdbcTableDataObjectTest/hsqldb", "org.hsqldb.jdbcDriver")
 
   test("write and read jdbc table") {
-    import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+    import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
     instanceRegistry.register(jdbcConnection)
     val table = Table(Some("public"), "table1")
     val dataObject = JdbcTableDataObject( "jdbcDO1", table = table, connectionId = "jdbcCon1", jdbcOptions = Map("createTableColumnTypes"->"type varchar(255), lastname varchar(255), firstname varchar(255)"))
@@ -45,7 +45,7 @@ class JdbcTableDataObjectTest extends DataObjectTestSuite {
   }
 
   test("write and read case insensitive jdbc table") {
-    import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+    import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
     instanceRegistry.register(jdbcConnection)
     // Use double quotes for case sensitivity in HSQLDB
     val table = Table(Some("\"PUBLIC\""), "\"CaseSensitiveTable1\"")
@@ -60,7 +60,7 @@ class JdbcTableDataObjectTest extends DataObjectTestSuite {
   }
 
   test("check pre/post sql") {
-    import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+    import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
     instanceRegistry.register(jdbcConnection)
 
     val table1 = Table(Some("public"), "table1")
@@ -102,7 +102,7 @@ class JdbcTableDataObjectTest extends DataObjectTestSuite {
 
   // query parameter doesn't work with hsqldb
   ignore("read jdbc table with query") {
-    import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+    import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
     instanceRegistry.register(jdbcConnection)
 
     // prepare data
@@ -124,7 +124,7 @@ class JdbcTableDataObjectTest extends DataObjectTestSuite {
   }
 
   test("isTableExisting should return not only the table but also the view - read jdbc:hsqldb view and table") {
-    import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+    import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
     instanceRegistry.register(jdbcConnection)
     try {
       val db = "public"

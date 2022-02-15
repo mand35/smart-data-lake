@@ -20,6 +20,7 @@ package io.smartdatalake.workflow.action.customlogic
 
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.util.misc._
+import io.smartdatalake.util.spark.DefaultExpressionData
 import io.smartdatalake.workflow.action.customlogic.CustomDfTransformerConfig.fnTransformType
 import io.smartdatalake.workflow.action.sparktransformer._
 import org.apache.spark.sql.{DataFrame, SparkSession}

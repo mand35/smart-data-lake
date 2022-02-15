@@ -19,9 +19,9 @@
 
 package io.smartdatalake.workflow.dataobject
 
-import java.io.File
+import io.smartdatalake.util.spark.DataFrameUtil
 
-import io.smartdatalake.util.misc.DataFrameUtil
+import java.io.File
 import io.smartdatalake.workflow.{ActionPipelineContext, SchemaViolationException}
 import org.apache.commons.io.FileUtils
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}

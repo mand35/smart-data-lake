@@ -78,5 +78,7 @@ object ScalaUtil {
    * Return None if given Map is empty, otherwise Some(map). 
    */
   def optionalizeMap(m: Map[String,String]): Option[Map[String,String]] = if (m.isEmpty) None else Some(m)
-  
+
+  def arrayToSeq[T](arr: Array[T]): Seq[T] = if (arr == null) Seq() else arr.toSeq
+
 }

@@ -21,13 +21,16 @@ package io.smartdatalake.workflow.dataobject
 import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ConnectionId, DataObjectId}
 import io.smartdatalake.config.{ConfigurationException, FromConfigFactory, InstanceRegistry}
+import io.smartdatalake.dataframe.GenericSchema
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.definitions.{SDLSaveMode, SaveModeMergeOptions, SaveModeOptions}
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
-import io.smartdatalake.util.misc.{DefaultExpressionData, SchemaUtil, SmartDataLakeLogger, SparkExpressionUtil}
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
+import io.smartdatalake.util.misc.{SchemaUtil, SmartDataLakeLogger}
+import io.smartdatalake.util.spark.{DefaultExpressionData, SparkExpressionUtil}
 import io.smartdatalake.workflow.ActionPipelineContext
 import io.smartdatalake.workflow.connection.JdbcTableConnection
+import io.smartdatalake.dataframe.spark.SparkSchema
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.StructType
@@ -72,7 +75,7 @@ case class JdbcTableDataObject(override val id: DataObjectId,
                                postReadSql: Option[String] = None,
                                preWriteSql: Option[String] = None,
                                postWriteSql: Option[String] = None,
-                               override val schemaMin: Option[StructType] = None,
+                               override val schemaMin: Option[GenericSchema] = None,
                                override var table: Table,
                                jdbcFetchSize: Int = 1000,
                                saveMode: SDLSaveMode = SDLSaveMode.Overwrite,
@@ -91,7 +94,7 @@ case class JdbcTableDataObject(override val id: DataObjectId,
   @DeveloperApi
   val connection: JdbcTableConnection = getConnection[JdbcTableConnection](connectionId)
 
-  private val options = jdbcOptions ++ Map(
+  override val options = jdbcOptions ++ Map(
     "url" -> connection.url,
     "driver" -> connection.driver,
     "fetchSize" -> jdbcFetchSize.toString
@@ -138,20 +141,20 @@ case class JdbcTableDataObject(override val id: DataObjectId,
     }
   }
 
-  override def getDataFrame(partitionValues: Seq[PartitionValues] = Seq())(implicit context: ActionPipelineContext): DataFrame = {
+  override def getSparkDataFrame(partitionValues: Seq[PartitionValues] = Seq())(implicit context: ActionPipelineContext): DataFrame = {
     val queryOrTable = Map(table.query.map(q => ("query",q)).getOrElse("dbtable"->table.fullName))
     val df = context.sparkSession.read.format("jdbc")
       .options(options)
       .options(connection.getAuthModeSparkOptions)
       .options(queryOrTable)
       .load()
-    validateSchemaMin(df, "read")
+    validateSchemaMin(SparkSchema(df.schema), "read")
     df.colNamesLowercase
   }
 
-  override def init(df: DataFrame, partitionValues: Seq[PartitionValues], saveModeOptions: Option[SaveModeOptions] = None)(implicit context: ActionPipelineContext): Unit = {
+  override def initSparkDataFrame(df: DataFrame, partitionValues: Seq[PartitionValues], saveModeOptions: Option[SaveModeOptions] = None)(implicit context: ActionPipelineContext): Unit = {
     implicit val session: SparkSession = context.sparkSession
-    validateSchemaMin(df, "write")
+    validateSchemaMin(SparkSchema(df.schema), "write")
     validateSchemaHasPartitionCols(df, "write")
     validateSchemaHasPrimaryKeyCols(df, table.primaryKey.getOrElse(Seq()), "write")
     val saveModeTargetDf = saveModeOptions.map(_.convertToTargetSchema(df)).getOrElse(df)
@@ -211,11 +214,11 @@ case class JdbcTableDataObject(override val id: DataObjectId,
     }
   }
 
-  override def writeDataFrame(df: DataFrame, partitionValues: Seq[PartitionValues] = Seq(), isRecursiveInput: Boolean = false, saveModeOptions: Option[SaveModeOptions] = None)
+  override def writeSparkDataFrame(df: DataFrame, partitionValues: Seq[PartitionValues] = Seq(), isRecursiveInput: Boolean = false, saveModeOptions: Option[SaveModeOptions] = None)
                              (implicit context: ActionPipelineContext): Unit = {
     implicit val session: SparkSession = context.sparkSession
     require(table.query.isEmpty, s"($id) Cannot write to jdbc DataObject defined by a query.")
-    validateSchemaMin(df, "write")
+    validateSchemaMin(SparkSchema(df.schema), "write")
     validateSchemaHasPartitionCols(df, "write")
     validateSchemaHasPrimaryKeyCols(df, table.primaryKey.getOrElse(Seq()), "write")
     val saveModeTargetDf = saveModeOptions.map(_.convertToTargetSchema(df)).getOrElse(df)
@@ -341,7 +344,7 @@ case class JdbcTableDataObject(override val id: DataObjectId,
   private var cachedExistingSchema: Option[StructType] = None
   private def getExistingSchema(implicit context: ActionPipelineContext): Option[StructType] = {
     if (isTableExisting && cachedExistingSchema.isEmpty) {
-      cachedExistingSchema = Some(getDataFrame().schema)
+      cachedExistingSchema = Some(getSparkDataFrame().schema)
       // convert to lowercase when Spark is in non-casesensitive mode
       if (!SchemaUtil.isSparkCaseSensitive) cachedExistingSchema = Some(StructType(SchemaUtil.prepareSchemaForDiff(cachedExistingSchema.get, ignoreNullable = false, caseSensitive = true)))
     }
@@ -349,7 +352,7 @@ case class JdbcTableDataObject(override val id: DataObjectId,
   }
 
   private def validateSchemaOnWrite(df: DataFrame)(implicit context: ActionPipelineContext): Unit = {
-    getExistingSchema.foreach(schema => validateSchema(df, schema, "write"))
+    getExistingSchema.foreach(schema => validateSchema(SparkSchema(df.schema), SparkSchema(schema), "write"))
   }
 
   def deleteAllData(): Unit = {
@@ -367,7 +370,7 @@ case class JdbcTableDataObject(override val id: DataObjectId,
    */
   override def listPartitions(implicit context: ActionPipelineContext): Seq[PartitionValues] = {
     if (partitions.nonEmpty) {
-      PartitionValues.fromDataFrame(getDataFrame().select(partitions.map(col):_*).distinct)
+      PartitionValues.fromDataFrame(getSparkDataFrame().select(partitions.map(col):_*).distinct)
     } else Seq()
   }
 

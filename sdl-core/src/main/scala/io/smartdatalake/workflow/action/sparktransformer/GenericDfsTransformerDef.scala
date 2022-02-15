@@ -19,13 +19,13 @@
 
 package io.smartdatalake.workflow.action.sparktransformer
 
-import io.smartdatalake.config.SdlConfigObject.{ActionId, DataObjectId}
-import io.smartdatalake.config.{ParsableFromConfig, SdlConfigObject}
+import io.smartdatalake.config.ParsableFromConfig
+import io.smartdatalake.config.SdlConfigObject.ActionId
 import io.smartdatalake.dataframe.GenericDataFrame
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.{DefaultExpressionData, SparkExpressionUtil}
+import io.smartdatalake.util.spark.{DefaultExpressionData, SparkExpressionUtil}
 import io.smartdatalake.workflow.ActionPipelineContext
-import io.smartdatalake.workflow.spark.{SparkDataFrame, SparkSubFeed}
+import io.smartdatalake.dataframe.spark.{SparkDataFrame, SparkSubFeed}
 import org.apache.spark.sql.DataFrame
 
 import scala.reflect.runtime.universe

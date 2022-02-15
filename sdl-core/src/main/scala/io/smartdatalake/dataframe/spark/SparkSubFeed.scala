@@ -17,16 +17,15 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package io.smartdatalake.workflow.spark
+package io.smartdatalake.dataframe.spark
 
 import io.smartdatalake.config.SdlConfigObject.DataObjectId
 import io.smartdatalake.dataframe.{GenericColumn, GenericDataFrame, GenericDataType, GenericSchema}
 import io.smartdatalake.definitions.ExecutionModeResult
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.DataFrameUtil
-import io.smartdatalake.util.streaming.DummyStreamProvider
+import io.smartdatalake.util.spark.{DataFrameUtil, DummyStreamProvider}
 import io.smartdatalake.workflow._
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{ArrayType, StringType, StructField, StructType}
 import org.apache.spark.sql.{Column, DataFrame, functions}
 
 import scala.reflect.runtime.universe
@@ -96,7 +95,7 @@ case class SparkSubFeed(@transient override val dataFrame: Option[SparkDataFrame
     case x => this.copy(dataFrame = None, partitionValues = unionPartitionValues(x.partitionValues), isDAGStart = this.isDAGStart || x.isDAGStart)
   }
   override def clearFilter(breakLineageOnChange: Boolean = true)(implicit context: ActionPipelineContext): SparkSubFeed = {
-    // if filter is removed, also the DataFrame must be removed so that the next action get's a fresh unfiltered DataFrame with all data of this DataObject
+    // if filter is removed, normally also the DataFrame must be removed so that the next action get's a fresh unfiltered DataFrame with all data of this DataObject
     if (breakLineageOnChange && filter.isDefined) {
       logger.info(s"($dataObjectId) breakLineage called for SubFeed from clearFilter")
       this.copy(filter = None).breakLineage
@@ -112,16 +111,17 @@ case class SparkSubFeed(@transient override val dataFrame: Option[SparkDataFrame
   }
   override def isStreaming: Option[Boolean] = dataFrame.map(_.inner.isStreaming)
   override def hasReusableDataFrame: Boolean = dataFrame.isDefined && !isDummy && !isStreaming.getOrElse(false)
+  // TODO: still needed?
   def getFilterCol: Option[Column] = {
     filter.map(functions.expr)
   }
   private[smartdatalake] def convertToDummy(schema: SparkSchema)(implicit context: ActionPipelineContext): SparkSubFeed = {
     val dummyDf = dataFrame.map{
       dataFrame =>
-        if (dataFrame.inner.isStreaming) DummyStreamProvider.getDummyDf(schema.inner)(context.sparkSession)
-        else DataFrameUtil.getEmptyDataFrame(schema.inner)(context.sparkSession)
+        if (dataFrame.inner.isStreaming) SparkDataFrame(DummyStreamProvider.getDummyDf(schema.inner)(context.sparkSession))
+        else schema.getEmptyDataFrame(dataObjectId)
     }
-    this.copy(dataFrame = dummyDf.map(SparkDataFrame), isDummy = true)
+    this.copy(dataFrame = dummyDf, isDummy = true)
   }
   override def applyExecutionModeResultForInput(result: ExecutionModeResult, mainInputId: DataObjectId)(implicit context: ActionPipelineContext): SparkSubFeed = {
     // apply input filter
@@ -163,6 +163,12 @@ object SparkSubFeed extends SubFeedConverter[SparkSubFeed] with DataFrameSubFeed
       case _ => throw new IllegalStateException(s"Unsupported subFeedType ${column.subFeedType.typeSymbol.name} in method max")
     }
   }
+  override def count(column: GenericColumn): GenericColumn = {
+    column match {
+      case sparkColumn: SparkColumn => SparkColumn(functions.count(sparkColumn.inner))
+      case _ => throw new IllegalStateException(s"Unsupported subFeedType ${column.subFeedType.typeSymbol.name} in method count")
+    }
+  }
   override def getEmptyDataFrame(schema: GenericSchema)(implicit context: ActionPipelineContext): GenericDataFrame = {
     schema match {
       case sparkSchema: SparkSchema => SparkDataFrame(DataFrameUtil.getEmptyDataFrame(sparkSchema.inner)(context.sparkSession))
@@ -175,13 +181,38 @@ object SparkSubFeed extends SubFeedConverter[SparkSubFeed] with DataFrameSubFeed
       case _ => throw new IllegalStateException(s"Can not create SparkDataFrame for ${schema.subFeedType.typeSymbol.name}")
     }
   }
+  override def getSubFeed(df: GenericDataFrame, dataObjectId: DataObjectId, partitionValues: Seq[PartitionValues])(implicit context: ActionPipelineContext): DataFrameSubFeed = {
+    df match {
+      case sparkDf: SparkDataFrame => SparkSubFeed(Some(sparkDf), dataObjectId, partitionValues)
+      case _ => throw new IllegalStateException(s"Can not create SparkSubFeed for ${df.subFeedType.typeSymbol.name}")
+    }
+  }
   override def stringType: GenericDataType = SparkDataType(StringType)
+  override def arrayType(dataType: GenericDataType): GenericDataType = {
+    dataType match {
+      case sparkDataType: SparkDataType => SparkDataType(ArrayType(sparkDataType.inner))
+      case _ => throw new IllegalStateException(s"Can not create SparkDataType for ${dataType.subFeedType.typeSymbol.name}")
+    }
+  }
+  override def structType(fields: Map[String,GenericDataType]): GenericDataType = {
+    assert(fields.values.forall(_.isInstanceOf[SparkDataType]), s"Unsupported subFeedType(s) ${fields.values.filterNot(_.isInstanceOf[SparkDataType]).map(_.subFeedType.typeSymbol.name).toSeq.distinct.mkString(", ")} in method structType")
+    val sparkFields = fields.map{ case (name,dataType) => StructField(name, dataType.asInstanceOf[SparkDataType].inner)}.toSeq
+    SparkDataType(StructType(sparkFields))
+  }
   /**
    * Construct array from given columns removing null values (Snowpark API)
    */
   override def array_construct_compact(columns: GenericColumn*): GenericColumn = {
     assert(columns.forall(_.isInstanceOf[SparkColumn]), s"Unsupported subFeedType(s) ${columns.filterNot(_.isInstanceOf).map(_.subFeedType.typeSymbol.name).distinct.mkString(", ")} in method array_construct_compact")
     SparkColumn(functions.flatten(functions.array(columns.map(_.asInstanceOf[SparkColumn].inner):_*)))
+  }
+  override def array(columns: GenericColumn*): GenericColumn = {
+    assert(columns.forall(_.isInstanceOf[SparkColumn]), s"Unsupported subFeedType(s) ${columns.filterNot(_.isInstanceOf).map(_.subFeedType.typeSymbol.name).distinct.mkString(", ")} in method array")
+    SparkColumn(functions.array(columns.map(_.asInstanceOf[SparkColumn].inner):_*))
+  }
+  override def struct(columns: GenericColumn*): GenericColumn = {
+    assert(columns.forall(_.isInstanceOf[SparkColumn]), s"Unsupported subFeedType(s) ${columns.filterNot(_.isInstanceOf).map(_.subFeedType.typeSymbol.name).distinct.mkString(", ")} in method struct")
+    SparkColumn(functions.struct(columns.map(_.asInstanceOf[SparkColumn].inner):_*))
   }
   override def expr(sqlExpr: String): GenericColumn = SparkColumn(functions.expr(sqlExpr))
   override def when(condition: GenericColumn, value: GenericColumn): GenericColumn = {

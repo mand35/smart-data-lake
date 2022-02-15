@@ -25,7 +25,7 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.types._
 
 import java.nio.file.Files
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 import org.apache.hadoop.fs.Path
 
 

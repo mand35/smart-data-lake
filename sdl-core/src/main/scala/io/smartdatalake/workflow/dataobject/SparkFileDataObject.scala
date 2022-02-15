@@ -22,15 +22,18 @@ import io.smartdatalake.dataframe.GenericSchema
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.definitions.{Environment, SDLSaveMode, SaveModeOptions}
 import io.smartdatalake.util.hdfs.{PartitionValues, SparkRepartitionDef}
-import io.smartdatalake.util.misc.DataFrameUtil.{DataFrameReaderUtils, DataFrameWriterUtils}
-import io.smartdatalake.util.misc.{CompactionUtil, DataFrameUtil}
-import io.smartdatalake.workflow.spark.SparkSchema
-import io.smartdatalake.workflow.{ActionPipelineContext, ProcessingLogicException}
+import io.smartdatalake.util.spark.DataFrameUtil.{DataFrameReaderUtils, DataFrameWriterUtils}
+import io.smartdatalake.util.misc.CompactionUtil
+import io.smartdatalake.util.spark.DataFrameUtil
+import io.smartdatalake.dataframe.spark.{SparkSchema, SparkSubFeed}
+import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed, ProcessingLogicException}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.input_file_name
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
+
+import scala.reflect.runtime.universe.typeOf
 
 /**
  * A [[DataObject]] backed by a file in HDFS. Can load file contents into an Apache Spark [[DataFrame]]s.
@@ -92,7 +95,9 @@ private[smartdatalake] trait SparkFileDataObject extends HadoopFileDataObject
    * @param sourceExists Whether the source file/table exists already. Existing sources may have a source schema.
    * @return The schema to use for the data frame reader when reading from the source.
    */
-  def getSchema(sourceExists: Boolean): Option[SparkSchema] = schema
+  def getSchema(sourceExists: Boolean): Option[SparkSchema] = schema.map(_.convertIfNeeded(typeOf[SparkSubFeed]).asInstanceOf[SparkSchema])
+
+  override def options: Map[String, String] = Map() // override options because of conflicting definitions in CanCreateSparkDataFrame and CanWriteSparkDataFrame
 
   /**
    * Constructs an Apache Spark [[DataFrame]] from the underlying file content.
@@ -102,7 +107,7 @@ private[smartdatalake] trait SparkFileDataObject extends HadoopFileDataObject
    */
   override def getSparkDataFrame(partitionValues: Seq[PartitionValues] = Seq())(implicit context: ActionPipelineContext): DataFrame = {
     implicit val session: SparkSession = context.sparkSession
-    import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+    import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 
     val wrongPartitionValues = PartitionValues.checkWrongPartitionValues(partitionValues, partitions)
     assert(wrongPartitionValues.isEmpty, s"getDataFrame got request with PartitionValues keys ${wrongPartitionValues.mkString(",")} not included in $id partition columns ${partitions.mkString(", ")}")
@@ -152,7 +157,7 @@ private[smartdatalake] trait SparkFileDataObject extends HadoopFileDataObject
     // Hadoop directory must exist for creating DataFrame below. Reading the DataFrame on read also for not yet existing data objects is needed to build the spark lineage of DataFrames.
     if (!filesystem.exists(hadoopPath.getParent)) filesystem.mkdirs(hadoopPath)
 
-    val schemaOpt = schema.map(_.inner).orElse(pipelineSchema).get
+    val schemaOpt = getSchema(checkFilesExisting).map(_.inner).orElse(pipelineSchema).get
     val df = session.readStream
       .format(format)
       .options(options ++ this.options)
@@ -163,8 +168,9 @@ private[smartdatalake] trait SparkFileDataObject extends HadoopFileDataObject
   }
 
   override def createReadSchema(writeSchema: GenericSchema)(implicit context: ActionPipelineContext): GenericSchema = {
+    val helper = DataFrameSubFeed.getHelper(writeSchema.subFeedType)
     // add additional columns created by SparkFileDataObject
-    filenameColumn.map(colName => addFieldIfNotExisting(writeSchema, colName, writeSchema.stringType))
+    filenameColumn.map(colName => addFieldIfNotExisting(writeSchema, colName, helper.stringType))
       .getOrElse(writeSchema)
   }
 

@@ -23,9 +23,10 @@ import io.smartdatalake.config.ConfigurationException
 import io.smartdatalake.config.SdlConfigObject.{ActionId, DataObjectId}
 import io.smartdatalake.util.dag.{DAGException, ExceptionSeverity}
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.{CustomCodeUtil, ProductUtil, SmartDataLakeLogger, SparkExpressionUtil}
+import io.smartdatalake.util.misc.{CustomCodeUtil, ProductUtil, SmartDataLakeLogger}
 import io.smartdatalake.util.dag.DAGHelper.NodeId
 import io.smartdatalake.util.dag.ExceptionSeverity.ExceptionSeverity
+import io.smartdatalake.util.spark.SparkExpressionUtil
 import io.smartdatalake.workflow.ExecutionPhase.ExecutionPhase
 import io.smartdatalake.workflow._
 import io.smartdatalake.workflow.action.ActionHelper.{getOptionalDataFrame, searchCommonInits}

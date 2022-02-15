@@ -19,20 +19,23 @@
 
 package io.smartdatalake.workflow.dataobject
 
-import com.snowflake.snowpark.Session
 import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ConnectionId, DataObjectId}
 import io.smartdatalake.config.{ConfigurationException, FromConfigFactory, InstanceRegistry}
-import io.smartdatalake.dataframe.SnowparkLanguageImplementation.SnowparkDataFrame
-import io.smartdatalake.dataframe.SparkLanguageImplementation.{SparkDataFrame, SparkStructType}
+import io.smartdatalake.dataframe.GenericSchema
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.definitions.{SDLSaveMode, SaveModeOptions}
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
-import io.smartdatalake.workflow.SubFeed.GenericDataFrameSubFeed
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 import io.smartdatalake.workflow.connection.SnowflakeConnection
-import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed, SnowparkSubFeed, SparkSubFeed}
+import io.smartdatalake.dataframe.spark.{SparkDataFrame, SparkSchema, SparkSubFeed}
+import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed}
 import net.snowflake.spark.snowflake.Utils.SNOWFLAKE_SOURCE_NAME
+import org.apache.spark.{sql => spark}
+import com.snowflake.snowpark
+import io.smartdatalake.dataframe.snowflake.SnowparkSubFeed
+
+import scala.reflect.runtime.universe.{Type, typeOf}
 
 /**
  * [[DataObject]] of type SnowflakeTableDataObject.
@@ -50,7 +53,7 @@ import net.snowflake.spark.snowflake.Utils.SNOWFLAKE_SOURCE_NAME
 // TODO: we should add virtual partitions as for JdbcTableDataObject and KafkaDataObject, so that PartitionDiffMode can be used...
 case class SnowflakeTableDataObject(override val id: DataObjectId,
                                     override var table: Table,
-                                    override val schemaMin: Option[SparkStructType] = None,
+                                    override val schemaMin: Option[GenericSchema] = None,
                                     saveMode: SDLSaveMode = SDLSaveMode.Overwrite,
                                     connectionId: ConnectionId,
                                     comment: Option[String] = None,
@@ -60,7 +63,7 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
 
   private val connection = getConnection[SnowflakeConnection](connectionId)
 
-  def session: Session = {
+  def session: snowpark.Session = {
     connection.getSnowparkSession(table.db.get)
   }
 
@@ -69,7 +72,7 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
   }
 
   // Get a Spark DataFrame with the table contents for Spark transformations
-  override def getDataFrame(partitionValues: Seq[PartitionValues] = Seq())(implicit context: ActionPipelineContext): SparkDataFrame = {
+  override def getSparkDataFrame(partitionValues: Seq[PartitionValues] = Seq())(implicit context: ActionPipelineContext): spark.DataFrame = {
     val queryOrTable = Map(table.query.map(q => ("query", q)).getOrElse("dbtable" -> (connection.database + "." + table.fullName)))
     val df = context.sparkSession
       .read
@@ -81,9 +84,9 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
   }
 
   // Write a Spark DataFrame to the Snowflake table
-  override def writeDataFrame(df: SparkDataFrame, partitionValues: Seq[PartitionValues], isRecursiveInput: Boolean, saveModeOptions: Option[SaveModeOptions])
+  override def writeSparkDataFrame(df: spark.DataFrame, partitionValues: Seq[PartitionValues], isRecursiveInput: Boolean, saveModeOptions: Option[SaveModeOptions])
                              (implicit context: ActionPipelineContext): Unit = {
-    validateSchemaMin(df, role = "write")
+    validateSchemaMin(SparkSchema(df.schema), role = "write")
     val finalSaveMode: SDLSaveMode = saveModeOptions.map(_.saveMode).getOrElse(saveMode)
 
     df.write
@@ -101,19 +104,19 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
 
   private[smartdatalake] override def getSubFeed(partitionValues: Seq[PartitionValues] = Seq(), subFeedType: Class[_])(implicit context: ActionPipelineContext): GenericDataFrameSubFeed = {
     subFeedType match {
-      case t if t == classOf[SparkSubFeed] => SparkSubFeed(Some(getDataFrame(partitionValues)), id, partitionValues)
+      case t if t == classOf[SparkSubFeed] => SparkSubFeed(Some(SparkDataFrame(getSparkDataFrame(partitionValues))), id, partitionValues)
       case t if t == classOf[SnowparkSubFeed] => SnowparkSubFeed(Some(getSnowparkDataFrame()), id, partitionValues)
     }
   }
-  private[smartdatalake] override def getSubFeedSupportedTypes: Seq[Class[_]] = Seq(classOf[SparkSubFeed], classOf[SnowparkSubFeed])
+  private[smartdatalake] override def getSubFeedSupportedTypes: Seq[Type] = Seq(typeOf[SparkSubFeed], typeOf[SnowparkSubFeed])
 
-  private[smartdatalake] override def writeSubFeed(subFeed: GenericDataFrameSubFeed, partitionValues: Seq[PartitionValues], isRecursiveInput: Boolean, saveModeOptions: Option[SaveModeOptions])(implicit context: ActionPipelineContext): Unit = {
+  private[smartdatalake] override def writeSubFeed(subFeed: DataFrameSubFeed, partitionValues: Seq[PartitionValues], isRecursiveInput: Boolean, saveModeOptions: Option[SaveModeOptions])(implicit context: ActionPipelineContext): Unit = {
     subFeed match {
       case sparkSubFeed: SparkSubFeed => writeDataFrame(sparkSubFeed.dataFrame.get, partitionValues, isRecursiveInput, saveModeOptions)
-      case sfSubFeed: SnowparkSubFeed => writeSnowparkDataFrame(sfSubFeed.dataFrame.get, isRecursiveInput, saveModeOptions)
+      case snowparkSubFeed: SnowparkSubFeed => writeSnowparkDataFrame(snowparkSubFeed.dataFrame.get, isRecursiveInput, saveModeOptions)
     }
   }
-  private[smartdatalake] override def writeSubFeedSupportedTypes: Seq[Class[_]] = Seq(classOf[SparkSubFeed], classOf[SnowparkSubFeed])
+  private[smartdatalake] override def writeSubFeedSupportedTypes: Seq[Type] = Seq(typeOf[SparkSubFeed], typeOf[SnowparkSubFeed])
 
   override def isDbExisting(implicit context: ActionPipelineContext): Boolean = {
     val sql = s"SHOW DATABASES LIKE '${connection.database}'"
@@ -132,14 +135,14 @@ case class SnowflakeTableDataObject(override val id: DataObjectId,
   /**
    * Read the contents of a table as a Snowpark DataFrame
    */
-  def getSnowparkDataFrame()(implicit context: ActionPipelineContext): SnowparkDataFrame = {
+  def getSnowparkDataFrame()(implicit context: ActionPipelineContext): snowpark.DataFrame = {
     this.session.table(table.fullName)
   }
 
   /**
    * Write a Snowpark DataFrame to Snowflake, used in Snowpark actions
    */
-  def writeSnowparkDataFrame(df: SnowparkDataFrame, isRecursiveInput: Boolean = false, saveModeOptions: Option[SaveModeOptions] = None)
+  def writeSnowparkDataFrame(df: snowpark.DataFrame, isRecursiveInput: Boolean = false, saveModeOptions: Option[SaveModeOptions] = None)
                             (implicit context: ActionPipelineContext): Unit = {
     // TODO: implement saveMode & isRecursiveInput...
     df.write.saveAsTable(table.fullName)

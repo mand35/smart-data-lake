@@ -38,7 +38,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSuite}
  */
 class KafkaTopicDataObjectTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter with EmbeddedKafka with DataObjectTestSuite with SmartDataLakeLogger {
 
-  import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+  import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
   import session.implicits._
 
   private val kafkaConnection = KafkaConnection("kafkaCon1", "localhost:6001")

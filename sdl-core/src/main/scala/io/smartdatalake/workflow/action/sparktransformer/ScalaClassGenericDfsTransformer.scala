@@ -23,7 +23,8 @@ import io.smartdatalake.config.SdlConfigObject.ActionId
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
 import io.smartdatalake.dataframe.GenericDataFrame
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.{CustomCodeUtil, DefaultExpressionData}
+import io.smartdatalake.util.misc.CustomCodeUtil
+import io.smartdatalake.util.spark.DefaultExpressionData
 import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed}
 import io.smartdatalake.workflow.action.customlogic.{CustomDfsTransformer, CustomGenericDfsTransformer}
 import org.apache.spark.sql.DataFrame

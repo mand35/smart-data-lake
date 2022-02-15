@@ -24,10 +24,9 @@ import io.smartdatalake.config.SdlConfigObject.{ActionId, DataObjectId}
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
 import io.smartdatalake.dataframe.GenericDataFrame
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.{DefaultExpressionData, SparkExpressionUtil}
-import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed}
+import io.smartdatalake.util.spark.{DefaultExpressionData, SparkExpressionUtil}
 import io.smartdatalake.workflow.action.ActionHelper
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed}
 
 /**
  * Configuration of a custom GenericDataFrame transformation between one input and one output (1:1) as SQL code.

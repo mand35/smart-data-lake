@@ -22,6 +22,7 @@ package io.smartdatalake.dataframe
 import io.smartdatalake.config.SdlConfigObject.DataObjectId
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed, DataFrameSubFeedCompanion}
+import org.apache.spark.sql.DataFrame
 
 import scala.collection.mutable
 import scala.reflect.runtime.universe.Type
@@ -36,6 +37,8 @@ trait GenericDataFrame {
 
   def select(columns: Seq[GenericColumn]): GenericDataFrame
 
+  def groupBy(columns: Seq[GenericColumn]): GenericGroupedDataFrame
+
   def agg(columns: Seq[GenericColumn]): GenericDataFrame
 
   def unionByName(other: GenericDataFrame): GenericDataFrame
@@ -46,26 +49,77 @@ trait GenericDataFrame {
 
   def withColumn(colName: String, expression: GenericColumn): GenericDataFrame
 
+  def drop(colName: String): GenericDataFrame
+
   def createOrReplaceTempView(viewName: String): Unit
+
+  // instantiate subfeed helper
+  private lazy val helper = DataFrameSubFeed.getHelper(subFeedType)
+
+  /**
+   * returns sub data frame which consists of those rows which contain at least a null in the specified columns
+   */
+  def getNulls(cols: Seq[String]): GenericDataFrame = {
+    import helper._
+    filter(cols.map(col(_).isNull).reduce(_ and _))
+  }
+
+  /**
+   * Count nlets of this data frame with respect to specified columns.
+   * The result data frame possesses the columns cols and an additional count column countColname.
+   */
+  def getNonuniqueStats(cols: Seq[String] = schema.columns, countColname: String = "_cnt_"): GenericDataFrame = {
+    import helper._
+    // for better usability we define empty Array of cols to mean all columns of df
+    val colsInDf = if (cols.isEmpty) schema.columns else schema.columns.intersect(cols)
+    groupBy(colsInDf.map(col))
+      .agg(Seq(count(col("*")).as(countColname)))
+      .filter(col(countColname) > lit(1))
+  }
+  /**
+   * Returns rows of this data frame which violate uniqueness for specified columns cols.
+   * The result data frame possesses an additional count column countColname.
+   *
+   * @param cols : names of columns which are to be considered, unspecified or empty Array mean all columns of df
+   * @return subdataframe of nlets
+   */
+  def getNonuniqueRows(cols: Seq[String] = schema.columns): GenericDataFrame = {
+    import helper._
+    val dfNonUnique = getNonuniqueStats(cols, "_duplicationCount_").drop("_duplicationCount_")
+    join(dfNonUnique, cols).select(cols.map(col))
+  }
+
+  /**
+   * returns sub data frame which consists of those rows which violate PK condition for specfied columns
+   */
+  def getPKviolators(cols: Seq[String] = schema.columns): GenericDataFrame = getNulls(cols).unionByName(getNonuniqueRows(cols))
 
   /**
    * Move partition columns at end of DataFrame as required when writing to Hive in Spark > 2.x
    */
   def movePartitionColsLast(partitions: Seq[String])(implicit helper: DataFrameSubFeedCompanion): GenericDataFrame = {
+    import helper._
     val (partitionCols, nonPartitionCols) = schema.columns.partition(c => partitions.contains(c))
     val newColOrder = nonPartitionCols ++ partitionCols
-    select(newColOrder.map(helper.col))
+    select(newColOrder.map(col))
   }
 
   /**
    * Convert column names to lower case
    */
   def colNamesLowercase(implicit helper: DataFrameSubFeedCompanion): GenericDataFrame = {
-    select(schema.columns.map(c => helper.col(c).as(c.toLowerCase())))
+    import helper._
+    select(schema.columns.map(c => col(c).as(c.toLowerCase())))
   }
 
   def getDataFrameSubFeed(dataObjectId: DataObjectId, partitionValues: Seq[PartitionValues], filter: Option[String]): DataFrameSubFeed
+
 }
+trait GenericGroupedDataFrame {
+  def subFeedType: Type
+  def agg(columns: Seq[GenericColumn]): GenericDataFrame
+}
+
 trait GenericSchema {
   def subFeedType: Type
   def convertIfNeeded(toSubFeedType: Type): GenericSchema = {
@@ -74,20 +128,36 @@ trait GenericSchema {
   }
   def diffSchema(schema: GenericSchema): Option[GenericSchema]
   def columns: Seq[String]
+  def fields: Seq[GenericField]
   def sql: String
   def add(colName: String, dataType: GenericDataType): GenericSchema
-  def getEmptyDataFrame(implicit context: ActionPipelineContext): GenericDataFrame
+  def remove(colName: String): GenericSchema
+  def getEmptyDataFrame(dataObjectId: DataObjectId)(implicit context: ActionPipelineContext): GenericDataFrame
   def getDataType(colName: String): GenericDataType
+  def makeNullable: GenericSchema
 }
 trait GenericColumn {
   def subFeedType: Type
   def ===(other: GenericColumn): GenericColumn
+  def >(other: GenericColumn): GenericColumn
+  def <(other: GenericColumn): GenericColumn
   def and(other: GenericColumn): GenericColumn
   def or(other: GenericColumn): GenericColumn
   @scala.annotation.varargs
   def isin(list: Any*): GenericColumn
+  def isNull: GenericColumn
   def as(name: String): GenericColumn
   def cast(dataType: GenericDataType): GenericColumn
+  /**
+   * Convert expression to SQL representation
+   */
+  def exprSql: String
+}
+trait GenericField {
+  def subFeedType: Type
+  def name: String
+  def dataType: GenericDataType
+  def makeNullable: GenericField
 }
 trait GenericDataType {
   def subFeedType: Type
@@ -98,12 +168,15 @@ trait GenericDataType {
   def isSortable: Boolean
   def typeName: String
   def sql: String
+  def makeNullable: GenericDataType
 }
 trait GenericRow {
+  def subFeedType: Type
   def get(index: Int): Any
   def getAs[T](index: Int): T
 }
 
+// TODO
 /*
 object DataFrameSubFeedHelper {
   // search all classes implementing DataFrameSubFeedHelper

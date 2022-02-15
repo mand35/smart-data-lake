@@ -40,7 +40,7 @@ private[smartdatalake] trait CanWriteDataFrame {
   def init(df: GenericDataFrame, partitionValues: Seq[PartitionValues], saveModeOptions: Option[SaveModeOptions] = None)(implicit context: ActionPipelineContext): Unit = Unit
 
   /**
-   * Write a Spark DataFrame to the DataObject
+   * Write a DataFrame to the DataObject
    */
   def writeDataFrame(df: GenericDataFrame, partitionValues: Seq[PartitionValues] = Seq(), isRecursiveInput: Boolean = false, saveModeOptions: Option[SaveModeOptions] = None)(implicit context: ActionPipelineContext): Unit
 

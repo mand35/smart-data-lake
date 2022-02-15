@@ -23,7 +23,7 @@ import com.typesafe.config.ConfigFactory
 import io.smartdatalake.testutils.{DataObjectTestSuite, TestUtil}
 import io.smartdatalake.util.json.JsonUtils
 import io.smartdatalake.util.misc.CustomCodeUtil
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 import io.smartdatalake.workflow.action.script.CmdScript
 import org.apache.spark.sql.types.DataType
 import org.json4s.JsonAST.JArray

@@ -21,14 +21,15 @@ package io.smartdatalake.workflow.dataobject
 import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ConnectionId, DataObjectId}
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
-import io.smartdatalake.dataframe.DomainSpecificLanguage.GenericSchema
+import io.smartdatalake.dataframe.GenericSchema
 import io.smartdatalake.definitions.SDLSaveMode
 import io.smartdatalake.definitions.SDLSaveMode.SDLSaveMode
 import io.smartdatalake.util.hdfs.{PartitionValues, SparkRepartitionDef}
-import io.smartdatalake.util.misc.{AclDef, DataFrameUtil}
+import io.smartdatalake.util.misc.AclDef
+import io.smartdatalake.util.spark.DataFrameUtil
 import io.smartdatalake.workflow.ActionPipelineContext
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SparkSession}
 
 /**
  * A [[DataObject]] backed by an Microsoft Excel data source.
@@ -184,7 +185,7 @@ case class ExcelOptions(
     } else None
   }
 
-  def toMap(schema: Option[StructType]): Map[String, Option[Any]] = Map(
+  def toMap(schema: Option[GenericSchema]): Map[String, Option[Any]] = Map(
       "dataAddress" -> getDataAddress,
       "treatEmptyValuesAsNulls" -> treatEmptyValuesAsNulls,
       "header" -> Some(useHeader),

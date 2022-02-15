@@ -17,22 +17,28 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package io.smartdatalake.workflow
+package io.smartdatalake.dataframe.snowflake
 
-import com.snowflake.snowpark.DataFrame
+import com.snowflake.snowpark.Row
 import io.smartdatalake.config.SdlConfigObject.DataObjectId
-import io.smartdatalake.dataframe.SnowparkLanguageImplementation
-import io.smartdatalake.dataframe.SnowparkLanguageImplementation.{SnowparkColumn, SnowparkDataFrame, SnowparkDataType, SnowparkLanguageType, SnowparkStructField, SnowparkStructType}
+import io.smartdatalake.dataframe.GenericDataFrame
 import io.smartdatalake.definitions.ExecutionModeResult
 import io.smartdatalake.util.hdfs.PartitionValues
+import io.smartdatalake.workflow.dataobject.SnowflakeTableDataObject
+import io.smartdatalake.workflow.{ActionPipelineContext, DataFrameSubFeed, SubFeed, SubFeedConverter}
 
-case class SnowparkSubFeed(@transient override val dataFrame: Option[DataFrame],
+import scala.reflect.runtime.universe.{Type, typeOf}
+
+case class SnowparkSubFeed(@transient override val dataFrame: Option[SnowparkDataFrame],
                            override val dataObjectId: DataObjectId,
                            override val partitionValues: Seq[PartitionValues],
                            override val isDAGStart: Boolean = false,
-                           override val isSkipped: Boolean = false)
-  extends DataFrameSubFeed[SnowparkDataFrame, SnowparkColumn, SnowparkStructType, SnowparkDataType] {
-  override def L: SnowparkLanguageType = SnowparkLanguageImplementation.language
+                           override val isSkipped: Boolean = false,
+                           override val isDummy: Boolean = false,
+                           override val filter: Option[String] = None
+                          )
+  extends DataFrameSubFeed {
+  override val tpe: Type = typeOf[SnowparkSubFeed]
 
   override def clearPartitionValues(breakLineageOnChange: Boolean = true)(implicit context: ActionPipelineContext): SnowparkSubFeed = {
     this.copy(partitionValues = Seq())
@@ -52,7 +58,7 @@ case class SnowparkSubFeed(@transient override val dataFrame: Option[DataFrame],
   }
 
   override def toOutput(dataObjectId: DataObjectId): SnowparkSubFeed = {
-    this.copy(dataFrame = None, isDAGStart = false, isSkipped = false, dataObjectId = dataObjectId)
+    this.copy(dataFrame = None, filter = None, isDAGStart = false, isSkipped = false, isDummy = false, dataObjectId = dataObjectId)
   }
 
   override def union(other: SubFeed)(implicit context: ActionPipelineContext): SubFeed = other match {
@@ -66,21 +72,46 @@ case class SnowparkSubFeed(@transient override val dataFrame: Option[DataFrame],
         isDAGStart = this.isDAGStart || subFeed.isDAGStart)
   }
 
+  override def clearFilter(breakLineageOnChange: Boolean = true)(implicit context: ActionPipelineContext): SnowparkSubFeed = {
+    // if filter is removed, normally also the DataFrame must be removed so that the next action get's a fresh unfiltered DataFrame with all data of this DataObject
+    if (breakLineageOnChange && filter.isDefined) {
+      logger.info(s"($dataObjectId) breakLineage called for SubFeed from clearFilter")
+      this.copy(filter = None).breakLineage
+    } else this.copy(filter = None)
+  }
+
   override def persist: SnowparkSubFeed = {
     logger.warn("Persist is not implemented by Snowpark")
+    // TODO: should we use "dataFrame.map(_.inner.cacheResult())"
     this
   }
 
-  override def applyExecutionModeResultForInput(result: ExecutionModeResult, mainInputId: DataObjectId)(implicit context: ActionPipelineContext): SnowparkSubFeed = {
-    this.copy(partitionValues = result.inputPartitionValues, isSkipped = false)
-  }
-
   override def breakLineage(implicit context: ActionPipelineContext): SnowparkSubFeed = {
-    this.copy()
+    // in order to keep the schema but truncate logical plan, a dummy DataFrame is created.
+    // dummy DataFrames must be exchanged to real DataFrames before reading in exec-phase.
+    if(dataFrame.isDefined && !isDummy && !context.simulation) convertToDummy(dataFrame.get.schema) else this
   }
 
+  override def hasReusableDataFrame: Boolean = dataFrame.isDefined && !isDummy && !isStreaming.getOrElse(false)
+
+  private[smartdatalake] def convertToDummy(schema: SnowparkSchema)(implicit context: ActionPipelineContext): SnowparkSubFeed = {
+    val dummyDf = dataFrame.map(_ => schema.getEmptyDataFrame(dataObjectId))
+    this.copy(dataFrame = dummyDf, isDummy = true)
+  }
+  override def applyExecutionModeResultForInput(result: ExecutionModeResult, mainInputId: DataObjectId)(implicit context: ActionPipelineContext): SnowparkSubFeed = {
+    // apply input filter
+    val inputFilter = if (this.dataObjectId == mainInputId) result.filter else None
+    this.copy(partitionValues = result.inputPartitionValues, filter = inputFilter, isSkipped = false).breakLineage // breaklineage keeps DataFrame schema without content
+  }
   override def applyExecutionModeResultForOutput(result: ExecutionModeResult)(implicit context: ActionPipelineContext): SnowparkSubFeed = {
-    this.copy(partitionValues = result.inputPartitionValues, isSkipped = false, dataFrame = None)
+    this.copy(partitionValues = result.inputPartitionValues, filter = result.filter, isSkipped = false, dataFrame = None)
+  }
+  override def withDataFrame(dataFrame: Option[GenericDataFrame]): SnowparkSubFeed = this.copy(dataFrame = dataFrame.map(_.asInstanceOf[SnowparkDataFrame]))
+  override def withPartitionValues(partitionValues: Seq[PartitionValues]): DataFrameSubFeed = this.copy(partitionValues = partitionValues)
+  override def asDummy(): SnowparkSubFeed = this.copy(isDummy = true)
+  override def withFilter(partitionValues: Seq[PartitionValues], filter: Option[String]): DataFrameSubFeed = {
+    this.copy(partitionValues = partitionValues, filter = filter)
+      .applyFilter
   }
 }
 

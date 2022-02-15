@@ -25,7 +25,7 @@ import io.smartdatalake.definitions.Environment
 import io.smartdatalake.util.hdfs.PartitionValues
 import io.smartdatalake.util.misc.{PerformanceUtils, ScalaUtil}
 import io.smartdatalake.workflow.dataobject.{CanHandlePartitions, DataObject}
-import io.smartdatalake.workflow.spark.SparkSubFeed
+import io.smartdatalake.dataframe.spark.SparkSubFeed
 import io.smartdatalake.workflow._
 
 import java.time.Duration

@@ -25,14 +25,14 @@ import io.smartdatalake.dataframe.GenericDataFrame
 import io.smartdatalake.definitions._
 import io.smartdatalake.metrics.{SparkStageMetricsListener, SparkStreamingQueryListener}
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 import io.smartdatalake.util.misc.ScalaUtil
-import io.smartdatalake.util.streaming.DummyStreamProvider
+import io.smartdatalake.util.spark.DummyStreamProvider
 import io.smartdatalake.workflow.ExecutionPhase.ExecutionPhase
 import io.smartdatalake.workflow._
 import io.smartdatalake.workflow.action.sparktransformer._
 import io.smartdatalake.workflow.dataobject._
-import io.smartdatalake.workflow.spark.{SparkDataFrame, SparkSubFeed}
+import io.smartdatalake.dataframe.spark.{SparkDataFrame, SparkSubFeed}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
 
@@ -208,7 +208,7 @@ private[smartdatalake] abstract class DataFrameActionImpl extends ActionSubFeeds
               .asDummy()
           } else if (subFeed.isStreaming.contains(true)) {
             // convert to empty normal DataFrame
-            subFeed.withDataFrame(subFeed.schema.map(x => x.getEmptyDataFrame))
+            subFeed.withDataFrame(subFeed.schema.map(x => x.getEmptyDataFrame(subFeed.dataObjectId)))
           } else subFeed
         }
     }

@@ -32,7 +32,7 @@ import io.smartdatalake.workflow.dataobject.{HiveTableDataObject, Table, TickToc
 import io.smartdatalake.workflow.{ActionPipelineContext, ExecutionPhase, SparkSubFeed}
 import org.apache.spark.sql.SparkSession
 import org.scalatest.{BeforeAndAfter, FunSuite}
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 
 class HistorizeActionTest extends FunSuite with BeforeAndAfter {
 

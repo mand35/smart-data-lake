@@ -38,7 +38,7 @@ import org.apache.spark.sql.functions.{col, lit, udf}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, SparkSession, functions}
 import org.scalatest.{BeforeAndAfter, FunSuite}
-import io.smartdatalake.util.misc.DataFrameUtil.DfSDL
+import io.smartdatalake.util.spark.DataFrameUtil.DfSDL
 import io.smartdatalake.workflow.action.sparktransformer.{AdditionalColumnsTransformer, SQLDfTransformer, SQLDfsTransformer, ScalaClassDfTransformer}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 

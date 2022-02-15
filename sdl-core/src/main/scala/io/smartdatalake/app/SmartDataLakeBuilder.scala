@@ -28,7 +28,7 @@ import io.smartdatalake.util.misc.{LogUtil, MemoryUtils, SerializableHadoopConfi
 import io.smartdatalake.workflow._
 import io.smartdatalake.workflow.action.RuntimeEventState.RuntimeEventState
 import io.smartdatalake.workflow.action.{Action, DataFrameActionImpl, RuntimeInfo, SDLExecutionId}
-import io.smartdatalake.workflow.spark.SparkSubFeed
+import io.smartdatalake.dataframe.spark.SparkSubFeed
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
 import scopt.OptionParser

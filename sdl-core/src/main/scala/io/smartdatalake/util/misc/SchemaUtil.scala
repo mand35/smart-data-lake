@@ -19,6 +19,7 @@
 
 package io.smartdatalake.util.misc
 
+import io.smartdatalake.dataframe.{GenericField, GenericSchema}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 
@@ -32,7 +33,7 @@ object SchemaUtil {
    * @param ignoreNullable if `true`, columns that only differ in their `nullable` property are considered equal.
    * @return the set of columns contained in `schemaRight` but not in `schemaLeft`.
    */
-  def schemaDiff(schemaLeft: StructType, schemaRight: StructType, ignoreNullable: Boolean = false, caseSensitive: Boolean = false, deep: Boolean = false): Set[StructField] = {
+  def schemaDiff(schemaLeft: GenericSchema, schemaRight: GenericSchema, ignoreNullable: Boolean = false, caseSensitive: Boolean = false, deep: Boolean = false): Set[StructField] = {
     if (deep) {
       deepPartialMatchDiffFields(schemaLeft.fields, schemaRight.fields, ignoreNullable, caseSensitive)
     } else {
@@ -42,7 +43,7 @@ object SchemaUtil {
     }
   }
 
-  def prepareSchemaForDiff(schemaIn: StructType, ignoreNullable: Boolean, caseSensitive: Boolean, ignoreMetadata: Boolean = true): Seq[StructField] = {
+  def prepareSchemaForDiff(schemaIn: GenericSchema, ignoreNullable: Boolean, caseSensitive: Boolean, ignoreMetadata: Boolean = true): Seq[StructField] = {
     var schema = schemaIn.fields.toSeq
     if (ignoreNullable) schema = nullableFields(schema)
     if (!caseSensitive) schema = lowerCaseFields(schema)
@@ -105,13 +106,6 @@ object SchemaUtil {
     }
   }
 
-  private def nullableFields(fields: Seq[StructField]): Seq[StructField] = {
-    fields.map(field => field.copy(
-      dataType = nullableDataType(field.dataType),
-      nullable = true
-    ))
-  }
-
   private def removeMetadataFields(fields: Seq[StructField]): Seq[StructField] = {
     fields.map(field => field.copy(
       dataType = removeMetadataDataType(field.dataType),
@@ -120,24 +114,6 @@ object SchemaUtil {
   }
   private def lowerCaseFields(fields: Seq[StructField]): Seq[StructField] = {
     fields.map(field => field.copy(name = field.name.toLowerCase))
-  }
-
-  private def nullableDataType(dataType: DataType): DataType = {
-    dataType match {
-      case struct: StructType => StructType(
-        fields = nullableFields(struct)
-      )
-      case ArrayType(elementType, _) => ArrayType(
-        nullableDataType(elementType),
-        containsNull = true
-      )
-      case MapType(keyType, valueType, _) => MapType(
-        nullableDataType(keyType),
-        nullableDataType(valueType),
-        valueContainsNull = true
-      )
-      case _ => dataType
-    }
   }
 
   private def removeMetadataDataType(dataType: DataType): DataType = {

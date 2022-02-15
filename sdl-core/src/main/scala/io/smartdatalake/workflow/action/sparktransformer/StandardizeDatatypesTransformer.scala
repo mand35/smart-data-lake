@@ -23,7 +23,7 @@ import com.typesafe.config.Config
 import io.smartdatalake.config.SdlConfigObject.{ActionId, DataObjectId}
 import io.smartdatalake.config.{FromConfigFactory, InstanceRegistry}
 import io.smartdatalake.util.hdfs.PartitionValues
-import io.smartdatalake.util.misc.DataFrameUtil._
+import io.smartdatalake.util.spark.DataFrameUtil._
 import io.smartdatalake.workflow.ActionPipelineContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
 

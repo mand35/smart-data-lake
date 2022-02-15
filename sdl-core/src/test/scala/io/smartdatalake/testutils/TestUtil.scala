@@ -29,7 +29,7 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration._
 import io.smartdatalake.app.{GlobalConfig, SmartDataLakeBuilderConfig}
 import io.smartdatalake.config.InstanceRegistry
 import io.smartdatalake.definitions.Environment
-import io.smartdatalake.util.misc.DataFrameUtil.{DfSDL, defaultPersistDf}
+import io.smartdatalake.util.spark.DataFrameUtil.{DfSDL, defaultPersistDf}
 import io.smartdatalake.util.misc.{SerializableHadoopConfiguration, SmartDataLakeLogger}
 import io.smartdatalake.workflow.action.SDLExecutionId
 import io.smartdatalake.workflow.{ActionPipelineContext, ExecutionPhase}
