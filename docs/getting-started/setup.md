@@ -33,7 +33,7 @@ Compile included Scala classes. Note: this might take some time, but it's only n
 
 Now let's see Smart Data Lake in action!
 
-    mkdir -f data
+    mkdir data
     docker run --rm -v ${PWD}/data:/mnt/data -v ${PWD}/target:/mnt/lib -v ${PWD}/config:/mnt/config sdl-spark:latest --config /mnt/config --feed-sel download
 
 This creates a folder in the current directory named *data* and then 
