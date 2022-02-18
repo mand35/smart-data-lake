@@ -25,7 +25,6 @@ In every data pipeline, you will have at least one *DataObject* for your input a
 If you have more than one action, you will also have at least one *DataObject* for each intermediary step between two actions.
 
 In our case, in order to get our departure data, we are going to build one action. Hence, we need one DataObject for our input, and one for our output.
-Create a directory called config in your current working directory and an empty file called application.conf. This is where we will define our data pipeline.
 
 ## Define departures objects
 Add the following lines to your configuration file:
